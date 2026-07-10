@@ -3,7 +3,7 @@
 #
 #   jobs:
 #     license-check:
-#       uses: MustardSeedNetworks/.github/.github/workflows/license-check.yml@main
+#       uses: MustardSeedNetworks/.github/.github/workflows/license-check.yml@<sha> # pin to a tag SHA (Renovate bumps it)
 #       with:
 #         extra_go_ignores: "modernc.org/mathutil"   # optional, comma-separated
 #

@@ -3,7 +3,7 @@
 # `needs: [semgrep]` exactly as before:
 #
 #   semgrep:
-#     uses: MustardSeedNetworks/.github/.github/workflows/semgrep.yml@main
+#     uses: MustardSeedNetworks/.github/.github/workflows/semgrep.yml@<sha> # pin to a tag SHA (Renovate bumps it)
 #
 # The three repos ran byte-identical Semgrep jobs; this is the one edit-point
 # for the pinned version and the config/severity policy.
