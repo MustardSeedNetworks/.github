@@ -1,0 +1,69 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }.",
+  "extends": [
+    "config:best-practices",
+    ":semanticCommits",
+    ":dependencyDashboard",
+    ":maintainLockFilesWeekly"
+  ],
+  "rangeStrategy": "pin",
+  "labels": ["dependencies"],
+  "schedule": ["before 9am on monday"],
+  "prConcurrentLimit": 6,
+  "prHourlyLimit": 4,
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "packageRules": [
+    {
+      "description": "Go toolchain, linter, and go.mod deps move together as one PR per repo.",
+      "matchManagers": ["gomod"],
+      "groupName": "go dependencies"
+    },
+    {
+      "description": "The go directive + toolchain bump is security-sensitive; keep it its own PR.",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "groupName": "go toolchain"
+    },
+    {
+      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, tsgo, types) as one PR.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/node",
+        "@typescript/native-preview",
+        "@biomejs/biome",
+        "vite",
+        "vitest",
+        "@playwright/test",
+        "tailwindcss"
+      ],
+      "groupName": "frontend toolchain"
+    },
+    {
+      "description": "Pin GitHub Actions to SHAs and group their bumps.",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true,
+      "groupName": "github actions"
+    },
+    {
+      "description": "Conservative first rollout: auto-merge only patch + Action digest bumps once CI is green. Widen to minor after the first wave is trusted.",
+      "matchUpdateTypes": ["patch", "pinDigest", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Minor and major always get a human PR review.",
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": false
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security", "dependencies"],
+    "automerge": true,
+    "schedule": ["at any time"]
+  }
+}
