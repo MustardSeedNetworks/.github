@@ -7,9 +7,11 @@
 #       with:
 #         extra_go_ignores: "modernc.org/mathutil"   # optional, comma-separated
 #
-# The self module and github.com/MustardSeedNetworks/foundation (our own
-# BUSL-1.1 first-party module, which go-licenses cannot classify) are always
-# ignored; real third-party GPL/AGPL/SSPL contamination still fails the build.
+# Always ignored: the self module, github.com/MustardSeedNetworks/foundation
+# (our own BUSL-1.1 module, which go-licenses cannot classify), and
+# modernc.org/mathutil (a BSD-3-Clause transitive dep of modernc.org/sqlite
+# that go-licenses reliably fails to classify — used fleet-wide). Real
+# third-party GPL/AGPL/SSPL contamination still fails the build.
 name: License Compliance (reusable)
 
 on:
@@ -60,7 +62,7 @@ jobs:
           EXTRA_IGNORES: ${{ inputs.extra_go_ignores }}
         run: |
           echo "Checking Go dependencies for license compliance..."
-          ignores="--ignore=${SELF_MODULE} --ignore=github.com/MustardSeedNetworks/foundation"
+          ignores="--ignore=${SELF_MODULE} --ignore=github.com/MustardSeedNetworks/foundation --ignore=modernc.org/mathutil"
           if [ -n "${EXTRA_IGNORES}" ]; then
             IFS=',' read -ra extra <<< "${EXTRA_IGNORES}"
             for m in "${extra[@]}"; do
