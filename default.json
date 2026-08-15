@@ -9,9 +9,9 @@
   ],
   "rangeStrategy": "pin",
   "labels": ["dependencies"],
-  "schedule": ["before 9am on monday"],
-  "prConcurrentLimit": 6,
-  "prHourlyLimit": 4,
+  "schedule": ["at any time"],
+  "prConcurrentLimit": 20,
+  "prHourlyLimit": 0,
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "packageRules": [
     {
@@ -26,14 +26,14 @@
       "groupName": "go toolchain"
     },
     {
-      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, tsgo, types) as one PR.",
+      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR.",
       "matchManagers": ["npm"],
       "matchPackageNames": [
         "react",
         "react-dom",
         "@types/react",
         "@types/node",
-        "@typescript/native-preview",
+        "typescript",
         "@biomejs/biome",
         "vite",
         "vitest",
@@ -49,15 +49,15 @@
       "groupName": "github actions"
     },
     {
-      "description": "Conservative first rollout: auto-merge only patch + Action digest bumps once CI is green. Widen to minor after the first wave is trusted.",
-      "matchUpdateTypes": ["patch", "pinDigest", "digest"],
+      "description": "Auto-merge patch, minor, and Action digest bumps once CI is green. CI is the gate: every repo runs lint, tests, build, and govulncheck before a merge can land.",
+      "matchUpdateTypes": ["patch", "minor", "pinDigest", "digest"],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
-      "description": "Minor and major always get a human PR review.",
-      "matchUpdateTypes": ["minor", "major"],
+      "description": "Majors always get a human PR review — they carry migration work (see tcell v3 / bubbletea v2).",
+      "matchUpdateTypes": ["major"],
       "automerge": false
     }
   ],
