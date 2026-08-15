@@ -1,17 +1,21 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }.",
+  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest: updates are raised as soon as they exist, and everything below a major auto-merges once CI is green.",
   "extends": [
     "config:best-practices",
     ":semanticCommits",
-    ":dependencyDashboard",
-    ":maintainLockFilesWeekly"
+    ":dependencyDashboard"
   ],
   "rangeStrategy": "pin",
   "labels": ["dependencies"],
-  "schedule": ["before 9am on monday"],
-  "prConcurrentLimit": 6,
-  "prHourlyLimit": 4,
+  "schedule": ["at any time"],
+  "prConcurrentLimit": 10,
+  "prHourlyLimit": 0,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "automerge": true
+  },
   "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "packageRules": [
     {
@@ -26,18 +30,21 @@
       "groupName": "go toolchain"
     },
     {
-      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, tsgo, types) as one PR.",
+      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR. Both `typescript` and `@typescript/native-preview` are listed so the group keeps covering the compiler across the TS7 stable migration.",
       "matchManagers": ["npm"],
       "matchPackageNames": [
         "react",
         "react-dom",
         "@types/react",
+        "@types/react-dom",
         "@types/node",
+        "typescript",
         "@typescript/native-preview",
         "@biomejs/biome",
         "vite",
         "vitest",
         "@playwright/test",
+        "playwright",
         "tailwindcss"
       ],
       "groupName": "frontend toolchain"
@@ -49,16 +56,22 @@
       "groupName": "github actions"
     },
     {
-      "description": "Conservative first rollout: auto-merge only patch + Action digest bumps once CI is green. Widen to minor after the first wave is trusted.",
-      "matchUpdateTypes": ["patch", "pinDigest", "digest"],
+      "description": "Node and npm move together — the pin lives in each repo's setup-node composite action and the two must not drift apart.",
+      "matchDepNames": ["node", "npm"],
+      "groupName": "node toolchain"
+    },
+    {
+      "description": "Always-latest: patch, minor and digest bumps auto-merge once CI is green. CI is the gate — every repo runs the full ci.yml plus blocking zizmor and govulncheck, so a bad bump fails rather than lands.",
+      "matchUpdateTypes": ["patch", "minor", "pinDigest", "digest", "bump"],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
-      "description": "Minor and major always get a human PR review.",
-      "matchUpdateTypes": ["minor", "major"],
-      "automerge": false
+      "description": "Majors are raised immediately but never auto-merged — a breaking change needs a human to read the changelog. This is the one place the always-latest policy stops short.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major-update"]
     }
   ],
   "vulnerabilityAlerts": {
