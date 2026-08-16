@@ -1,0 +1,54 @@
+name: Dependency Review
+
+# Blocks a PR that INTRODUCES a vulnerable or badly-licensed dependency, at
+# review time. This is the gap govulncheck leaves: govulncheck tells you a CVE
+# is reachable in code you already merged; this refuses the merge that brings
+# it in.
+#
+# Shared so all four products get the same policy from one file. Call it with:
+#
+#   dependency-review:
+#     uses: MustardSeedNetworks/.github/.github/workflows/dependency-review.yml@<sha>  # vX.Y.Z
+#     permissions:
+#       contents: read
+#       pull-requests: write
+
+on:
+  workflow_call:
+    inputs:
+      fail-on-severity:
+        description: 'Minimum severity that fails the check.'
+        required: false
+        type: string
+        default: 'high'
+      comment-summary-in-pr:
+        description: 'Post the findings as a PR comment.'
+        required: false
+        type: string
+        default: 'on-failure'
+
+permissions: {}
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # Needed only to post the summary comment on a failure.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@3c4e3dcb1aa7874d2c16be7d79418e9b7efd6261 # v4.8.2
+        with:
+          fail-on-severity: ${{ inputs.fail-on-severity }}
+          comment-summary-in-pr: ${{ inputs.comment-summary-in-pr }}
+          # The fleet is BUSL-1.1 source-available. Copyleft licences would
+          # force us to relicense, so they are refused rather than reviewed
+          # after the fact.
+          deny-licenses: GPL-3.0, AGPL-3.0, LGPL-3.0, GPL-2.0
