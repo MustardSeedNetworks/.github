@@ -1,0 +1,84 @@
+name: 'apt install (bounded)'
+description: >-
+  Install apt packages with bounded network waits and a retry, so a stalled
+  Ubuntu mirror fails fast instead of consuming the whole job budget.
+inputs:
+  packages:
+    description: 'Space-separated package list, e.g. "libpcap-dev cppcheck".'
+    required: true
+  attempts:
+    description: 'How many times to try before failing.'
+    required: false
+    default: '3'
+  command-timeout:
+    description: >-
+      Seconds any single apt invocation may run before it is killed. Raise for
+      large package sets (Playwright''s webkit stack pulls ~180 packages).
+    required: false
+    default: '120'
+  update:
+    description: "Run apt-get update first. Set 'false' when a prior step already did."
+    required: false
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Install ${{ inputs.packages }}
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        ATTEMPTS: ${{ inputs.attempts }}
+        CMD_TIMEOUT: ${{ inputs.command-timeout }}
+        DO_UPDATE: ${{ inputs.update }}
+      # By default apt blocks forever on a dead mirror connection. Two real
+      # incidents: niac's libpcap-dev install hung 25 minutes (job 95072124340)
+      # and stem's Playwright OS-deps hung 28 (job 95068053052) — both cancelled
+      # at the job timeout with no test having run, both surfacing as a red
+      # build. Bounding Acquire::*::Timeout makes apt give up in seconds; the
+      # retry then absorbs the transient case.
+      #
+      # A composite step cannot carry `timeout-minutes`, so callers should keep
+      # a step-level timeout at the call site as the outer backstop.
+      run: |
+        set -uo pipefail
+
+        # Container jobs (goreleaser-cross, niac-content) run as root and have
+        # no sudo installed; runner jobs are non-root and need it.
+        if [ "$(id -u)" -eq 0 ]; then
+          SUDO=""
+        else
+          SUDO="sudo"
+        fi
+
+        $SUDO tee /etc/apt/apt.conf.d/99-ci-timeouts >/dev/null <<'EOF'
+        Acquire::http::Timeout "20";
+        Acquire::https::Timeout "20";
+        Acquire::Retries "2";
+        DPkg::Lock::Timeout "60";
+        EOF
+
+        attempt=1
+        while [ "$attempt" -le "$ATTEMPTS" ]; do
+          if [ "$attempt" -gt 1 ]; then
+            # A timeout kill can leave dpkg half-configured; recover first.
+            $SUDO dpkg --configure -a >/dev/null 2>&1 || true
+          fi
+
+          ok=true
+          if [ "$DO_UPDATE" = "true" ]; then
+            timeout -k 15 "$CMD_TIMEOUT" $SUDO apt-get update || ok=false
+          fi
+          if [ "$ok" = "true" ] &&
+             timeout -k 15 "$CMD_TIMEOUT" $SUDO apt-get install -y $PACKAGES; then
+            exit 0
+          fi
+
+          echo "apt install attempt ${attempt}/${ATTEMPTS} failed"
+          if [ "$attempt" -lt "$ATTEMPTS" ]; then
+            sleep $((attempt * 10))
+          fi
+          attempt=$((attempt + 1))
+        done
+
+        echo "::error::apt install failed after ${ATTEMPTS} attempts: ${PACKAGES}"
+        exit 1
