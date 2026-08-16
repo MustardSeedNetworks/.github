@@ -169,14 +169,23 @@ def linter_floor(root: Path, policy_dir: Path) -> list[str]:
     return sorted(required - enabled)
 
 
-def repo_settings(repo: str) -> dict:
+def repo_settings(repo: str) -> dict | None:
+    """Security settings, or None if the lookup itself failed.
+
+    None and {} must stay distinct. Swallowing a failed API call into an empty
+    dict reports "secret_scanning=unset" — a policy violation — when the truth
+    is that the check never ran. This bit for real: invoking the script with a
+    path instead of a repo slug produced `gh api repos/.`, a 404, and two
+    fabricated findings against a repo whose settings were correct. Once this
+    is a blocking gate, a token blip would red-line the whole fleet the same way.
+    """
     try:
         raw = subprocess.run(
             ["gh", "api", f"repos/{repo}", "--jq", ".security_and_analysis"],
             capture_output=True, text=True, timeout=60, check=True).stdout.strip()
         return json.loads(raw) if raw else {}
     except Exception:
-        return {}
+        return None
 
 
 def unpinned_tools(root: Path) -> list[str]:
@@ -219,11 +228,16 @@ def main() -> int:
 
     if repo:
         sa = repo_settings(repo)
-        for key, want in REQUIRED_REPO_SETTINGS.items():
-            got = (sa.get(key) or {}).get("status")
-            if got != want:
-                fail(f"repo setting {key}={got or 'unset'}, fleet requires {want}")
-                findings += 1
+        if sa is None:
+            fail(f"could not read security settings for '{repo}' — is it an "
+                 f"owner/name slug? This script takes a slug, not a path.")
+            findings += 1
+        else:
+            for key, want in REQUIRED_REPO_SETTINGS.items():
+                got = (sa.get(key) or {}).get("status")
+                if got != want:
+                    fail(f"repo setting {key}={got or 'unset'}, fleet requires {want}")
+                    findings += 1
 
     for rel, why in REQUIRED_SCRIPTS:
         if not (root / rel).exists():
