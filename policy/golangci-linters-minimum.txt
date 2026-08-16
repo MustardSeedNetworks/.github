@@ -1,0 +1,12 @@
+bodyclose
+errcheck
+errorlint
+gosec
+govet
+ineffassign
+nilerr
+noctx
+rowserrcheck
+sqlclosecheck
+staticcheck
+unused

@@ -30,6 +30,19 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Settings that must be identical fleet-wide. Free-tier GitHub cannot ENFORCE
+# these centrally (org rulesets need Team), so this check detects drift instead.
+# Every entry here exists because it was found missing in exactly one repo by
+# hand — trellis had none of them on 2026-08-16.
+REQUIRED_REPO_SETTINGS = {
+    "secret_scanning": "enabled",
+    "secret_scanning_push_protection": "enabled",
+}
+
+REQUIRED_FILES = [
+    (".github/CODEOWNERS", "a CI/release change can weaken a gate without touching product code"),
+]
+
 REQUIRED_SCRIPTS = [
     ("scripts/check-banned-vocabulary.py", "banned-vocabulary is a no-exceptions rule"),
     ("scripts/check-file-size.sh", "file-size ratchet"),
@@ -126,10 +139,91 @@ def required_contexts(repo: str) -> list[str]:
         return []
 
 
+def linter_floor(root: Path, policy_dir: Path) -> list[str]:
+    """Enabled linters missing against this repo's declared tier.
+
+    Trellis ran 5 linters with no gosec — no Go security linting at all on a
+    customer-facing product — and nothing caught it. A repo may ADD linters;
+    dropping below its tier is a finding.
+    """
+    tier_file = root / ".github/golangci-tier.txt"
+    tier = tier_file.read_text().strip() if tier_file.exists() else "full"
+    want = policy_dir / f"golangci-linters-{tier}.txt"
+    if not want.exists():
+        return []
+    try:
+        out = subprocess.run(["golangci-lint", "linters"], cwd=root,
+                             capture_output=True, text=True, timeout=180).stdout
+    except Exception:
+        return []
+    enabled, seen = set(), False
+    for line in out.splitlines():
+        if line.startswith("Enabled by your configuration"): seen = True; continue
+        if line.startswith("Disabled by"): break
+        if seen:
+            m = re.match(r"^([a-z0-9]+)", line)
+            if m: enabled.add(m.group(1))
+    if not enabled:
+        return []
+    required = {l.strip() for l in want.read_text().split() if l.strip()}
+    return sorted(required - enabled)
+
+
+def repo_settings(repo: str) -> dict:
+    try:
+        raw = subprocess.run(
+            ["gh", "api", f"repos/{repo}", "--jq", ".security_and_analysis"],
+            capture_output=True, text=True, timeout=60, check=True).stdout.strip()
+        return json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
+
+def unpinned_tools(root: Path) -> list[str]:
+    """`go install <mod>@latest` in CI or Makefiles.
+
+    An unpinned gate can change behaviour with no code change — either a
+    spurious break or a silent loss of coverage. trellis shipped govulncheck
+    (a hard gate) on @latest until 2026-08-16.
+    """
+    hits = []
+    globs = [".github/workflows/*.yml", "Makefile", "mk/*.mk"]
+    for pat in globs:
+        for f in root.glob(pat):
+            for i, line in enumerate(f.read_text(errors="ignore").splitlines(), 1):
+                if re.search(r"go install\s+\S+@latest", line):
+                    hits.append(f"{f.relative_to(root)}:{i}")
+    return hits
+
+
 def main() -> int:
     root = Path.cwd()
     repo = sys.argv[1] if len(sys.argv) > 1 else ""
     findings = 0
+
+    for rel, why in REQUIRED_FILES:
+        if not (root / rel).exists():
+            fail(f"missing {rel} ({why})")
+            findings += 1
+
+    policy = Path(__file__).resolve().parent.parent / "policy"
+    if policy.exists():
+        for missing in linter_floor(root, policy):
+            fail(f"linter '{missing}' is in this repo's declared tier but not enabled")
+            findings += 1
+
+    for site in unpinned_tools(root):
+        fail(f"{site}: `go install ...@latest` — pin it; an unpinned gate can "
+             f"change behaviour with no code change")
+        findings += 1
+
+    if repo:
+        sa = repo_settings(repo)
+        for key, want in REQUIRED_REPO_SETTINGS.items():
+            got = (sa.get(key) or {}).get("status")
+            if got != want:
+                fail(f"repo setting {key}={got or 'unset'}, fleet requires {want}")
+                findings += 1
 
     for rel, why in REQUIRED_SCRIPTS:
         if not (root / rel).exists():
