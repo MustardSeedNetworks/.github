@@ -20,6 +20,18 @@ inputs:
     description: "Run apt-get update first. Set 'false' when a prior step already did."
     required: false
     default: 'true'
+  no-install-recommends:
+    description: 'Pass --no-install-recommends to apt-get install.'
+    required: false
+    default: 'false'
+  command:
+    description: >-
+      Run this command under the same timeout/retry/apt-config wrapper instead
+      of `apt-get install`. For installers that shell out to apt themselves —
+      `npx playwright install-deps` is the case this exists for. When set,
+      `packages` and `no-install-recommends` are ignored.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -27,6 +39,8 @@ runs:
       shell: bash
       env:
         PACKAGES: ${{ inputs.packages }}
+        NO_RECOMMENDS: ${{ inputs.no-install-recommends }}
+        CUSTOM_CMD: ${{ inputs.command }}
         ATTEMPTS: ${{ inputs.attempts }}
         CMD_TIMEOUT: ${{ inputs.command-timeout }}
         DO_UPDATE: ${{ inputs.update }}
@@ -65,12 +79,26 @@ runs:
           fi
 
           ok=true
-          if [ "$DO_UPDATE" = "true" ]; then
+          if [ "$DO_UPDATE" = "true" ] && [ -z "$CUSTOM_CMD" ]; then
             timeout -k 15 "$CMD_TIMEOUT" $SUDO apt-get update || ok=false
           fi
-          if [ "$ok" = "true" ] &&
-             timeout -k 15 "$CMD_TIMEOUT" $SUDO apt-get install -y $PACKAGES; then
-            exit 0
+
+          if [ "$ok" = "true" ]; then
+            if [ -n "$CUSTOM_CMD" ]; then
+              # The command drives apt itself; the config drop-in above still
+              # bounds its waits.
+              if timeout -k 15 "$CMD_TIMEOUT" bash -c "$CUSTOM_CMD"; then
+                exit 0
+              fi
+            else
+              recommends=""
+              if [ "$NO_RECOMMENDS" = "true" ]; then
+                recommends="--no-install-recommends"
+              fi
+              if timeout -k 15 "$CMD_TIMEOUT" $SUDO apt-get install -y $recommends $PACKAGES; then
+                exit 0
+              fi
+            fi
           fi
 
           echo "apt install attempt ${attempt}/${ATTEMPTS} failed"
@@ -80,5 +108,5 @@ runs:
           attempt=$((attempt + 1))
         done
 
-        echo "::error::apt install failed after ${ATTEMPTS} attempts: ${PACKAGES}"
+        echo "::error::apt step failed after ${ATTEMPTS} attempts: ${CUSTOM_CMD:-$PACKAGES}"
         exit 1
