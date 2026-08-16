@@ -7,31 +7,48 @@
     ":dependencyDashboard"
   ],
   "rangeStrategy": "pin",
-  "labels": ["dependencies"],
-  "schedule": ["at any time"],
+  "labels": [
+    "dependencies"
+  ],
+  "schedule": [
+    "at any time"
+  ],
   "prConcurrentLimit": 10,
   "prHourlyLimit": 0,
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["at any time"],
+    "schedule": [
+      "at any time"
+    ],
     "automerge": true
   },
-  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
+  "postUpdateOptions": [
+    "gomodTidy",
+    "gomodUpdateImportPaths"
+  ],
   "packageRules": [
     {
       "description": "Go toolchain, linter, and go.mod deps move together as one PR per repo.",
-      "matchManagers": ["gomod"],
+      "matchManagers": [
+        "gomod"
+      ],
       "groupName": "go dependencies"
     },
     {
       "description": "The go directive + toolchain bump is security-sensitive; keep it its own PR.",
-      "matchManagers": ["gomod"],
-      "matchDepNames": ["go"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
       "groupName": "go toolchain"
     },
     {
       "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR. Both `typescript` and `@typescript/native-preview` are listed so the group keeps covering the compiler across the TS7 stable migration.",
-      "matchManagers": ["npm"],
+      "matchManagers": [
+        "npm"
+      ],
       "matchPackageNames": [
         "react",
         "react-dom",
@@ -51,32 +68,68 @@
     },
     {
       "description": "Pin GitHub Actions to SHAs and group their bumps.",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "pinDigests": true,
       "groupName": "github actions"
     },
     {
-      "description": "Node and npm move together — the pin lives in each repo's setup-node composite action and the two must not drift apart.",
-      "matchDepNames": ["node", "npm"],
+      "description": "Node and npm move together \u2014 the pin lives in each repo's setup-node composite action and the two must not drift apart.",
+      "matchDepNames": [
+        "node",
+        "npm"
+      ],
       "groupName": "node toolchain"
     },
     {
-      "description": "Always-latest: patch, minor and digest bumps auto-merge once CI is green. CI is the gate — every repo runs the full ci.yml plus blocking zizmor and govulncheck, so a bad bump fails rather than lands.",
-      "matchUpdateTypes": ["patch", "minor", "pinDigest", "digest", "bump"],
+      "description": "Always-latest: patch, minor and digest bumps auto-merge once CI is green. CI is the gate \u2014 every repo runs the full ci.yml plus blocking zizmor and govulncheck, so a bad bump fails rather than lands.",
+      "matchUpdateTypes": [
+        "patch",
+        "minor",
+        "pinDigest",
+        "digest",
+        "bump"
+      ],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
-      "description": "Majors are raised immediately but never auto-merged — a breaking change needs a human to read the changelog. This is the one place the always-latest policy stops short.",
-      "matchUpdateTypes": ["major"],
+      "description": "Majors are raised immediately but never auto-merged \u2014 a breaking change needs a human to read the changelog. This is the one place the always-latest policy stops short.",
+      "matchUpdateTypes": [
+        "major"
+      ],
       "automerge": false,
-      "labels": ["dependencies", "major-update"]
+      "labels": [
+        "dependencies",
+        "major-update"
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Go tools installed as `go install <module>@<version>` in Makefiles, mk/ fragments and workflows. Renovate's gomod manager only reads go.mod, so without this these pins are invisible to it \u2014 and an invisible pin is worse than a floating one, because it goes stale silently. Covers the security gates (govulncheck, gitleaks, staticcheck) among others.",
+      "matchStrings": [
+        "go install\\s+(?<depName>[^\\s@]+)@(?<currentValue>v[0-9][^\\s'\";\\\\]*)"
+      ],
+      "datasourceTemplate": "go",
+      "fileMatch": [
+        "^Makefile$",
+        "^mk/.+\\.mk$",
+        "^\\.github/workflows/.+\\.ya?ml$"
+      ]
     }
   ],
   "vulnerabilityAlerts": {
-    "labels": ["security", "dependencies"],
+    "labels": [
+      "security",
+      "dependencies"
+    ],
     "automerge": true,
-    "schedule": ["at any time"]
+    "schedule": [
+      "at any time"
+    ]
   }
 }
