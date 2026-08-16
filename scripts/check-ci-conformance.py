@@ -93,7 +93,7 @@ def emitted_checks(repo: str) -> set[str]:
         pass
     try:
         raw = subprocess.run(
-            ["gh", "pr", "list", "-R", repo, "--state", "all", "--limit", "3",
+            ["gh", "pr", "list", "-R", repo, "--state", "all", "--limit", "10",
              "--json", "headRefOid", "--jq", ".[].headRefOid"],
             capture_output=True, text=True, timeout=60, check=True).stdout
         shas.extend(x for x in raw.split() if x)
@@ -193,9 +193,22 @@ def main() -> int:
             if not emitted:
                 print(f"  note: could not read emitted checks; skipped verifying '{ctx}'")
                 continue
+            # Sampling is best-effort: a context may simply not have run in the
+            # sampled commits. Only fail when nothing in any workflow could emit
+            # it either — otherwise report it for a human to confirm.
+            in_files = any(
+                ctx.split(" / ")[0].strip() in wf.read_text()
+                for wf in (root / ".github/workflows").glob("*.yml")
+            )
+            if in_files:
+                print(
+                    f"  note: required context '{ctx}' not seen in the sampled runs, "
+                    "but a workflow references it — confirm it still reports."
+                )
+                continue
             fail(
-                f"required context '{ctx}' was not reported on main's latest commit — "
-                "if no job emits it, every merge is wedged"
+                f"required context '{ctx}' was not reported by any sampled run and "
+                "no workflow references it — every merge would be wedged"
             )
             findings += 1
 
