@@ -200,6 +200,11 @@ def unpinned_tools(root: Path) -> list[str]:
     for pat in globs:
         for f in root.glob(pat):
             for i, line in enumerate(f.read_text(errors="ignore").splitlines(), 1):
+                # Comments are prose, not gates. A comment explaining why a
+                # `go install ...@latest` was replaced used to trip this check,
+                # so documenting the fix re-created the finding it described.
+                if line.lstrip().startswith("#"):
+                    continue
                 if re.search(r"go install\s+\S+@latest", line):
                     hits.append(f"{f.relative_to(root)}:{i}")
     return hits
