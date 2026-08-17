@@ -1,0 +1,227 @@
+# Scheduled org-config half of check-ci-conformance.py.
+#
+# ci-conformance.yml (the blocking per-PR gate wired into seed/stem/niac-go/
+# trellis) runs the script's repo-local checks only. Two checks are
+# deliberately excluded from that gate because they need a token with
+# `Administration: Read-only` — more authority than a per-PR lint job should
+# carry, and they test org configuration drift, not anything a PR introduces:
+#
+#   - security_and_analysis (secret scanning + push protection), via
+#     GET /repos/{repo}
+#   - branch-protection required contexts actually being emitted, via
+#     GET /repos/{repo}/branches/main/protection
+#
+# This workflow runs those two checks on a schedule against all four product
+# repos, using an msn-ci-bot App token scoped to the MustardSeedNetworks org.
+#
+# ============================================================================
+# BLOCKED ON A PERMISSION GRANT — read before debugging a red run
+# ============================================================================
+# As of 2026-08-17 the msn-ci-bot App installation does NOT hold
+# `Administration: Read-only`. Without it, `check-ci-conformance.py <slug>`
+# cannot call the two endpoints above, and — per the "Mint GitHub App token"
+# step below — create-github-app-token hard-fails outright when asked for a
+# permission the installation lacks (this has broken a release before; see
+# release-please.yml). So this workflow WILL fail at the token-mint step
+# until an org owner adds `Administration: Read-only` to the msn-ci-bot
+# installation permissions (Org Settings -> GitHub Apps -> msn-ci-bot ->
+# Permissions & events -> Repository permissions -> Administration).
+#
+# Verify current installation permissions with:
+#   gh api /orgs/MustardSeedNetworks/installations \
+#     --jq '.installations[] | select(.app_slug|test("msn|ci-bot")) | .permissions'
+#
+# Do not weaken this workflow to work around a missing grant (e.g. dropping
+# to GITHUB_TOKEN) — a plain GITHUB_TOKEN's GET /repos/{repo} omits
+# security_and_analysis entirely rather than erroring, which makes the script
+# report "could not read security settings" as a finding on every repo. That
+# is a false positive, not a working substitute.
+# ============================================================================
+
+name: CI Conformance (scheduled, org config)
+
+on:
+  schedule:
+    # Daily, off the hour, well clear of other fleet cron jobs.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  # Matches ci-conformance.yml — one golangci-lint version fleet-wide so the
+  # linter-floor check reads the same linter set it gates on.
+  GOLANGCI_VERSION: v2.12.2
+  TRACKING_ISSUE_TITLE: "Scheduled org-config conformance: findings detected"
+
+jobs:
+  conformance:
+    name: Org-config conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out this repo (script source)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # See the "BLOCKED ON A PERMISSION GRANT" header above: this step fails
+      # outright until the msn-ci-bot installation is granted
+      # `Administration: Read-only`.
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: MustardSeedNetworks
+          # Scope to exactly the repos this run touches: the four product
+          # repos to check out + run the script against, and .github itself
+          # (checked out separately via GITHUB_TOKEN, but needed here for the
+          # issues:write use below). Unscoped `owner:` alone would grant the
+          # token every repo the msn-ci-bot installation can see.
+          repositories: seed,stem,niac-go,trellis,.github
+          # contents: read to check out the four product repos.
+          # administration: read to reach security_and_analysis and
+          #   branch-protection, the two checks this schedule exists for.
+          # issues: write to open/update the tracking issue on findings.
+          permission-contents: read
+          permission-administration: read
+          permission-issues: write
+
+      - name: Install golangci-lint
+        run: go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}"
+
+      - name: Check out seed
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/seed
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: repos/seed
+
+      - name: Check out stem
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/stem
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: repos/stem
+
+      - name: Check out niac-go
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/niac-go
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: repos/niac-go
+
+      - name: Check out trellis
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/trellis
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: repos/trellis
+
+      # Each of these runs the FULL script (repo-local checks too), but only
+      # the two API-backed checks are new here — the repo-local ones were
+      # already covered by that repo's own PR gate. continue-on-error so one
+      # repo's findings don't stop the others from being checked; the final
+      # "Fail if any repo had findings" step is what makes the run red.
+      - name: "Conformance: seed"
+        id: conf-seed
+        continue-on-error: true
+        working-directory: repos/seed
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: python3 "${GITHUB_WORKSPACE}/scripts/check-ci-conformance.py" MustardSeedNetworks/seed
+
+      - name: "Conformance: stem"
+        id: conf-stem
+        continue-on-error: true
+        working-directory: repos/stem
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: python3 "${GITHUB_WORKSPACE}/scripts/check-ci-conformance.py" MustardSeedNetworks/stem
+
+      - name: "Conformance: niac-go"
+        id: conf-niac-go
+        continue-on-error: true
+        working-directory: repos/niac-go
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: python3 "${GITHUB_WORKSPACE}/scripts/check-ci-conformance.py" MustardSeedNetworks/niac-go
+
+      - name: "Conformance: trellis"
+        id: conf-trellis
+        continue-on-error: true
+        working-directory: repos/trellis
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: python3 "${GITHUB_WORKSPACE}/scripts/check-ci-conformance.py" MustardSeedNetworks/trellis
+
+      - name: Collect results
+        id: results
+        env:
+          SEED_OUTCOME: ${{ steps.conf-seed.outcome }}
+          STEM_OUTCOME: ${{ steps.conf-stem.outcome }}
+          NIAC_OUTCOME: ${{ steps.conf-niac-go.outcome }}
+          TRELLIS_OUTCOME: ${{ steps.conf-trellis.outcome }}
+        run: |
+          failed=""
+          [ "$SEED_OUTCOME" = "failure" ] && failed="$failed seed"
+          [ "$STEM_OUTCOME" = "failure" ] && failed="$failed stem"
+          [ "$NIAC_OUTCOME" = "failure" ] && failed="$failed niac-go"
+          [ "$TRELLIS_OUTCOME" = "failure" ] && failed="$failed trellis"
+          failed="$(echo "$failed" | xargs)"
+
+          if [ -n "$failed" ]; then
+            echo "any_failed=true" >> "$GITHUB_OUTPUT"
+            echo "failed_repos=$failed" >> "$GITHUB_OUTPUT"
+            echo "### Conformance findings: $failed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "any_failed=false" >> "$GITHUB_OUTPUT"
+            echo "### No conformance findings" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Open or update tracking issue
+        if: steps.results.outputs.any_failed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          FAILED_REPOS: ${{ steps.results.outputs.failed_repos }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing="$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open \
+            --search "in:title \"${TRACKING_ISSUE_TITLE}\"" \
+            --json number --jq '.[0].number')"
+
+          body="Repos with findings this run: **${FAILED_REPOS}**
+
+          See the run log for details: ${RUN_URL}
+
+          This issue is reused by the scheduled conformance workflow — a new
+          run with findings comments here instead of opening a duplicate. It
+          stays open until a run finds nothing and is closed manually (the
+          workflow does not auto-close, since a clean run only proves *this*
+          run was clean, not that the underlying finding was fixed on
+          purpose)."
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "${GITHUB_REPOSITORY}" --body "$body"
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" \
+              --title "${TRACKING_ISSUE_TITLE}" \
+              --body "$body"
+          fi
+
+      - name: Fail if any repo had findings
+        if: steps.results.outputs.any_failed == 'true'
+        env:
+          FAILED_REPOS: ${{ steps.results.outputs.failed_repos }}
+        run: |
+          echo "::error::Conformance findings in:${FAILED_REPOS}"
+          exit 1
