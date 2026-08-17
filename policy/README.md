@@ -3,6 +3,12 @@
 `golangci-lint` has no remote `extends`, so a shared config cannot be enforced
 by the tool. These files let `check-ci-conformance.py` enforce it instead.
 
+That script runs as a blocking gate in all four repos, via the reusable
+`ci-conformance.yml` workflow (v1.3.0), called as a job inside each repo's
+`ci.yml` and listed in `ci-complete`'s `needs:`. It runs the repo-local checks
+only; the repo-settings and branch-protection checks need an admin-scoped token
+and run on a schedule instead.
+
 - **`golangci-linters-full.txt`** — the 77-linter set seed, stem and niac-go
   share. Verified byte-identical across all three by diffing every pair. It is
   an unmodified adoption of `maratori/golangci-lint-config`, so it is diffed
