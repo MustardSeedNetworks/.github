@@ -1,0 +1,64 @@
+name: CI Conformance
+
+# Asserts that a repo's own gates are wired to gate: every ci.yml job is either
+# in ci-complete's needs or documented as advisory, the enabled linters meet the
+# repo's declared tier, tool installs are pinned, and the governance scripts
+# exist.
+#
+# It runs the repo-local checks only — the script's repo-settings and
+# branch-protection checks need a token with Administration:read, which is too
+# much authority to hand every PR run for a lint job. Those two are org-config
+# drift rather than anything a PR can introduce, so they belong in a scheduled
+# org-level run instead. Passing no repo slug is what selects this mode.
+#
+# Call it with:
+#
+#   ci-conformance:
+#     uses: MustardSeedNetworks/.github/.github/workflows/ci-conformance.yml@<sha>  # vX.Y.Z
+#
+# and add `ci-conformance` to ci-complete's `needs:` so it can block a merge.
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  # The fleet pins one golangci-lint version everywhere, so this is not an input:
+  # a per-caller override would let a repo read its linters through a different
+  # version than it lints with. Bump in lockstep with the repos.
+  GOLANGCI_VERSION: v2.12.2
+
+jobs:
+  ci-conformance:
+    name: CI Conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the calling repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the policy repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/.github
+          path: .conformance
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # The script reads the enabled linters from this binary. It is a hard
+      # requirement, not an optimisation: without it the linter-floor check
+      # reports "not verified" and fails, rather than passing silently.
+      - name: Install golangci-lint
+        run: go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}"
+
+      - name: Check CI conformance
+        run: python3 .conformance/scripts/check-ci-conformance.py

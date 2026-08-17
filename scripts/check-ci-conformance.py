@@ -139,12 +139,24 @@ def required_contexts(repo: str) -> list[str]:
         return []
 
 
+class LinterFloorUnavailable(Exception):
+    """The floor could not be consulted, so it was not verified.
+
+    Distinct from "the floor is met", for the same reason repo_settings keeps
+    None and {} apart: as a blocking gate, a missing or unparseable
+    golangci-lint would otherwise report a clean pass while checking nothing.
+    A gate that silently stops gating is the failure this script exists to catch.
+    """
+
+
 def linter_floor(root: Path, policy_dir: Path) -> list[str]:
     """Enabled linters missing against this repo's declared tier.
 
     Trellis ran 5 linters with no gosec — no Go security linting at all on a
     customer-facing product — and nothing caught it. A repo may ADD linters;
     dropping below its tier is a finding.
+
+    Raises LinterFloorUnavailable if golangci-lint cannot be consulted.
     """
     tier_file = root / ".github/golangci-tier.txt"
     tier = tier_file.read_text().strip() if tier_file.exists() else "full"
@@ -154,8 +166,8 @@ def linter_floor(root: Path, policy_dir: Path) -> list[str]:
     try:
         out = subprocess.run(["golangci-lint", "linters"], cwd=root,
                              capture_output=True, text=True, timeout=180).stdout
-    except Exception:
-        return []
+    except Exception as exc:
+        raise LinterFloorUnavailable(f"could not run golangci-lint: {exc}") from exc
     enabled, seen = set(), False
     for line in out.splitlines():
         if line.startswith("Enabled by your configuration"): seen = True; continue
@@ -164,7 +176,10 @@ def linter_floor(root: Path, policy_dir: Path) -> list[str]:
             m = re.match(r"^([a-z0-9]+)", line)
             if m: enabled.add(m.group(1))
     if not enabled:
-        return []
+        raise LinterFloorUnavailable(
+            "golangci-lint reported no enabled linters — its output format may "
+            "have changed"
+        )
     required = {l.strip() for l in want.read_text().split() if l.strip()}
     return sorted(required - enabled)
 
@@ -222,8 +237,12 @@ def main() -> int:
 
     policy = Path(__file__).resolve().parent.parent / "policy"
     if policy.exists():
-        for missing in linter_floor(root, policy):
-            fail(f"linter '{missing}' is in this repo's declared tier but not enabled")
+        try:
+            for missing in linter_floor(root, policy):
+                fail(f"linter '{missing}' is in this repo's declared tier but not enabled")
+                findings += 1
+        except LinterFloorUnavailable as exc:
+            fail(f"linter floor not verified: {exc}")
             findings += 1
 
     for site in unpinned_tools(root):
