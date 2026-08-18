@@ -27,6 +27,7 @@ Exit 0 clean, 1 on any finding.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -281,6 +282,37 @@ def unpinned_tools(root: Path) -> list[str]:
     return hits
 
 
+POLICY_DIR_ENV = "CI_CONFORMANCE_POLICY_DIR"
+
+
+def policy_dir() -> Path:
+    """Resolve the directory holding the fleet policy files.
+
+    By default the policy sits beside this script, which is the right coupling
+    when both are checked out together. POLICY_DIR_ENV separates them, so a
+    caller can pin the *script* to a reviewed commit while still reading *policy*
+    live — the script is code whose bugs would red the whole fleet, the policy
+    is data whose whole purpose is to roll out at once (see #22).
+
+    An override that does not resolve raises rather than falling back. The
+    caller below skips every policy check when the directory is absent, so a
+    typo'd path would silently turn the linter-floor and status-vocabulary gates
+    into no-ops while still reporting success — the one failure mode a gate must
+    never have.
+    """
+    override = os.environ.get(POLICY_DIR_ENV, "").strip()
+    if not override:
+        return Path(__file__).resolve().parent.parent / "policy"
+
+    path = Path(override).resolve()
+    if not path.is_dir():
+        raise FileNotFoundError(
+            f"{POLICY_DIR_ENV}={override!r} is not a directory; refusing to "
+            f"fall back and silently skip the policy checks"
+        )
+    return path
+
+
 def main() -> int:
     root = Path.cwd()
     repo = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -291,7 +323,12 @@ def main() -> int:
             fail(f"missing {rel} ({why})")
             findings += 1
 
-    policy = Path(__file__).resolve().parent.parent / "policy"
+    try:
+        policy = policy_dir()
+    except FileNotFoundError as exc:
+        fail(str(exc))
+        return 1
+
     if policy.exists():
         try:
             for missing in linter_floor(root, policy):
