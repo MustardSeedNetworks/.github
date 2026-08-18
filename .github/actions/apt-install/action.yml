@@ -9,13 +9,13 @@ inputs:
   attempts:
     description: 'How many times to try before failing.'
     required: false
-    default: '3'
+    default: '2'
   command-timeout:
     description: >-
       Seconds any single apt invocation may run before it is killed. Raise for
       large package sets (Playwright''s webkit stack pulls ~180 packages).
     required: false
-    default: '120'
+    default: '270'
   update:
     description: "Run apt-get update first. Set 'false' when a prior step already did."
     required: false
@@ -44,15 +44,28 @@ runs:
         ATTEMPTS: ${{ inputs.attempts }}
         CMD_TIMEOUT: ${{ inputs.command-timeout }}
         DO_UPDATE: ${{ inputs.update }}
-      # By default apt blocks forever on a dead mirror connection. Two real
-      # incidents: niac's libpcap-dev install hung 25 minutes (job 95072124340)
-      # and stem's Playwright OS-deps hung 28 (job 95068053052) — both cancelled
-      # at the job timeout with no test having run, both surfacing as a red
-      # build. Bounding Acquire::*::Timeout makes apt give up in seconds; the
-      # retry then absorbs the transient case.
+      # Two distinct failures are bounded here, and they pull in opposite
+      # directions — a fix for one must not re-break the other.
       #
-      # A composite step cannot carry `timeout-minutes`, so callers should keep
-      # a step-level timeout at the call site as the outer backstop.
+      # STALLED MIRROR: apt blocks forever on a dead connection by default.
+      # niac's libpcap-dev install hung 25 minutes (job 95072124340) and stem's
+      # Playwright OS-deps hung 28 (job 95068053052) — both cancelled at the job
+      # timeout with no test having run. Acquire::*::Timeout bounds that, so a
+      # dead mirror still fails in seconds however long the outer timeout is.
+      #
+      # LOCK CONTENTION: the opposite problem, and the right response is to
+      # WAIT, not to retry. seed hit this four times on 2026-08-18
+      # (MustardSeedNetworks/seed#1950), twice ejecting a merge queue and once
+      # skipping a release, because three 60s waits all landed inside one window
+      # where another apt-get held the dpkg lock for ~3 minutes. Retrying into a
+      # held lock cannot succeed. Hence one patient wait (DPkg::Lock::Timeout
+      # 240) rather than several short ones, and a default of two attempts —
+      # the second is for a transient mirror error, not for the lock.
+      #
+      # A composite step cannot carry `timeout-minutes`, so callers must keep a
+      # step-level timeout as the outer backstop, and it has to exceed
+      # attempts x command-timeout or it will pre-empt the lock wait it is
+      # meant to protect.
       run: |
         set -uo pipefail
 
@@ -68,7 +81,7 @@ runs:
         Acquire::http::Timeout "20";
         Acquire::https::Timeout "20";
         Acquire::Retries "2";
-        DPkg::Lock::Timeout "60";
+        DPkg::Lock::Timeout "240";
         EOF
 
         attempt=1
