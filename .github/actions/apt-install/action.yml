@@ -44,8 +44,8 @@ runs:
         ATTEMPTS: ${{ inputs.attempts }}
         CMD_TIMEOUT: ${{ inputs.command-timeout }}
         DO_UPDATE: ${{ inputs.update }}
-      # Two distinct failures are bounded here, and they pull in opposite
-      # directions — a fix for one must not re-break the other.
+      # Three distinct failures are bounded here, and they pull in different
+      # directions — a fix for one must not re-break the others.
       #
       # STALLED MIRROR: apt blocks forever on a dead connection by default.
       # niac's libpcap-dev install hung 25 minutes (job 95072124340) and stem's
@@ -54,13 +54,27 @@ runs:
       # dead mirror still fails in seconds however long the outer timeout is.
       #
       # LOCK CONTENTION: the opposite problem, and the right response is to
-      # WAIT, not to retry. seed hit this four times on 2026-08-18
-      # (MustardSeedNetworks/seed#1950), twice ejecting a merge queue and once
-      # skipping a release, because three 60s waits all landed inside one window
-      # where another apt-get held the dpkg lock for ~3 minutes. Retrying into a
-      # held lock cannot succeed. Hence one patient wait (DPkg::Lock::Timeout
-      # 240) rather than several short ones, and a default of two attempts —
-      # the second is for a transient mirror error, not for the lock.
+      # WAIT, not to retry. Retrying into a held lock cannot succeed. Hence one
+      # patient wait (DPkg::Lock::Timeout 240) rather than several short ones,
+      # and a default of two attempts — the second is for a transient mirror
+      # error, not for the lock.
+      #
+      # ORPHANED apt-get: the reason the two above were not enough. The lock
+      # holder was us. A slow mirror pushes the download past command-timeout,
+      # the wrapper is killed, and the root-owned apt-get underneath SURVIVES —
+      # so the next attempt blocks on the process the previous attempt leaked.
+      # Proven on 2026-08-18 by the orphan's own output interleaving into the
+      # next attempt's log, continuing its download sequence (Get:6 -> Get:7 in
+      # seed run 32159346838, Get:114 -> Get:115 in niac run 32159744734) while
+      # that attempt reported the lock "held by process 7209/6101 (apt-get)".
+      # See MustardSeedNetworks/seed#1950. Two things follow:
+      #   - sudo goes OUTSIDE timeout. coreutils timeout already signals the
+      #     whole process group; what it could not do was signal root-owned
+      #     children as an unprivileged user. Running timeout as root fixes the
+      #     apt-get path outright.
+      #   - the custom-command path cannot do that (npx must not run as root),
+      #     so after a failed attempt we look the holder up by name and clear
+      #     it before retrying.
       #
       # A composite step cannot carry `timeout-minutes`, so callers must keep a
       # step-level timeout as the outer backstop, and it has to exceed
@@ -84,6 +98,40 @@ runs:
         DPkg::Lock::Timeout "240";
         EOF
 
+        # Names whoever still holds the dpkg lock after one of our attempts
+        # died, then gets it out of the way. Almost always our own orphan
+        # finishing the very install we asked for, so it is given a grace
+        # period first — letting it finish leaves the packages installed and
+        # the retry cheap. The `ps` line is the diagnostic that makes the next
+        # regression self-identifying rather than another unnamed PID.
+        clear_lock_holder() {
+          if ! command -v fuser >/dev/null 2>&1; then
+            echo "fuser unavailable (psmisc not installed); cannot name the lock holder"
+            return 0
+          fi
+
+          holders="$($SUDO fuser /var/lib/dpkg/lock-frontend 2>/dev/null || true)"
+          [ -n "$holders" ] || return 0
+
+          echo "dpkg lock still held after attempt ${attempt}; holder(s):"
+          $SUDO ps -o pid,ppid,etimes,cmd -p $holders || true
+
+          waited=0
+          while [ "$waited" -lt 120 ] \
+            && $SUDO fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+            sleep 5
+            waited=$((waited + 5))
+          done
+
+          holders="$($SUDO fuser /var/lib/dpkg/lock-frontend 2>/dev/null || true)"
+          if [ -n "$holders" ]; then
+            echo "holder outlasted the ${waited}s grace; clearing it"
+            $SUDO kill -TERM $holders 2>/dev/null || true
+            sleep 5
+            $SUDO kill -KILL $holders 2>/dev/null || true
+          fi
+        }
+
         attempt=1
         while [ "$attempt" -le "$ATTEMPTS" ]; do
           if [ "$attempt" -gt 1 ]; then
@@ -93,7 +141,7 @@ runs:
 
           ok=true
           if [ "$DO_UPDATE" = "true" ] && [ -z "$CUSTOM_CMD" ]; then
-            timeout -k 15 "$CMD_TIMEOUT" $SUDO apt-get update || ok=false
+            $SUDO timeout -k 15 "$CMD_TIMEOUT" apt-get update || ok=false
           fi
 
           if [ "$ok" = "true" ]; then
@@ -108,13 +156,15 @@ runs:
               if [ "$NO_RECOMMENDS" = "true" ]; then
                 recommends="--no-install-recommends"
               fi
-              if timeout -k 15 "$CMD_TIMEOUT" $SUDO apt-get install -y $recommends $PACKAGES; then
+              if $SUDO timeout -k 15 "$CMD_TIMEOUT" \
+                apt-get install -y $recommends $PACKAGES; then
                 exit 0
               fi
             fi
           fi
 
           echo "apt install attempt ${attempt}/${ATTEMPTS} failed"
+          clear_lock_holder
           if [ "$attempt" -lt "$ATTEMPTS" ]; then
             sleep $((attempt * 10))
           fi
