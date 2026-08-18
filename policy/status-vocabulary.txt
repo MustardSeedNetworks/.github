@@ -1,0 +1,32 @@
+# Fleet status vocabulary — the canonical definitions.
+#
+# Settled in MustardSeedNetworks/.github#21. Two vocabularies were live and
+# disagreed on the same screen; a Step-3 page showed a rollup reading `ok`
+# above a card reading `success`, and the three card unions differed from each
+# other. The resolution is a LAYERED SPLIT, not one union:
+#
+#   RollupState / RecordState — the design system's STATE layer. What the
+#     product concluded about a page or a record. `ok` is deliberately calm,
+#     `unknown` means we cannot say and prints em dashes.
+#
+#   Status — the CARD layer. A view of a backend diagnostic verdict, plus the
+#     card's own fetch lifecycle. In seed these strings ARE the wire format
+#     (internal/constants/strings.go -> json:"status" -> DTOs typed `string`),
+#     so it keeps the backend's own words. Renaming it would be an API change
+#     that TypeScript cannot verify, because the DTO field is not a union.
+#
+# `loading` stays in the card union: it is a lifecycle phase, not a verdict.
+# niac renders it as a live spinner during real fetches; folding it into
+# `unknown` would turn "still fetching" into "no data". The rule "loading is
+# never ok" governs the ROLLUP, which has no `loading` member.
+#
+# `info` is NOT a status. It is an Alert tone, modelled separately by each
+# repo's AlertStatus. It was instantiated zero times against the card union in
+# all three repos before being removed.
+#
+# Format: <TAB>-separated. Name, then the exact single-line definition.
+# A repo need not declare all three (trellis has no cards). What it declares
+# must match byte-for-byte.
+Status	export type Status = 'success' | 'warning' | 'error' | 'unknown' | 'loading';
+RollupState	export type RollupState = 'ok' | 'warn' | 'crit' | 'unknown';
+RecordState	export type RecordState = RollupState;
