@@ -18,6 +18,8 @@ Checks
    reason. A job that is neither is a gate that cannot fail the build.
 3. Every branch-protection required context is a real emitted check name.
    A required context nothing emits wedges every merge.
+4. The fleet status vocabulary has not drifted (policy/status-vocabulary.txt).
+   Two vocabularies were live at once and disagreed on the same screen.
 
 Exit 0 clean, 1 on any finding.
 """
@@ -184,6 +186,60 @@ def linter_floor(root: Path, policy_dir: Path) -> list[str]:
     return sorted(required - enabled)
 
 
+def status_vocabulary(root: Path, policy_dir: Path) -> list[str]:
+    """Definitions of the fleet status vocabulary that have drifted.
+
+    Two vocabularies were live at once and disagreed on the same screen
+    (MustardSeedNetworks/.github#21): the rollup said `ok` while the card
+    beneath it said `success`, and the three card unions differed from each
+    other. `info` had been dead in all three for long enough that nobody knew.
+
+    This checks the DEFINITIONS, not the usage sites. Grepping for status
+    literals would false-positive by construction: seed's backend legitimately
+    emits "success" on the wire, and PollingTargetsPage legitimately compares
+    `=== 'ok'` against a backend string. Only the type aliases are canonical,
+    so only they are compared.
+
+    Names not in the policy (AlertStatus, TestStatus, ConnectionStatus, the
+    cable-pair union) are deliberately out of scope — they are different
+    concepts, not a competing dialect.
+    """
+    want_file = policy_dir / "status-vocabulary.txt"
+    if not want_file.exists():
+        return []
+    want: dict[str, str] = {}
+    for line in want_file.read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        name, _, definition = line.partition("\t")
+        want[name.strip()] = definition.strip()
+
+    ui = root / "ui/src"
+    if not ui.is_dir():
+        return []
+
+    pattern = re.compile(r"^export type (%s) =" % "|".join(map(re.escape, want)))
+    findings = []
+    for path in sorted(ui.rglob("*.ts")) + sorted(ui.rglob("*.tsx")):
+        try:
+            lines = path.read_text().splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        for n, line in enumerate(lines, 1):
+            m = pattern.match(line)
+            if not m:
+                continue
+            name = m.group(1)
+            if line.strip() != want[name]:
+                rel = path.relative_to(root)
+                findings.append(
+                    f"{rel}:{n}: `{name}` has drifted from the fleet vocabulary\n"
+                    f"    found:    {line.strip()}\n"
+                    f"    expected: {want[name]}"
+                )
+    return findings
+
+
 def repo_settings(repo: str) -> dict | None:
     """Security settings, or None if the lookup itself failed.
 
@@ -243,6 +299,10 @@ def main() -> int:
                 findings += 1
         except LinterFloorUnavailable as exc:
             fail(f"linter floor not verified: {exc}")
+            findings += 1
+
+        for drift in status_vocabulary(root, policy):
+            fail(drift)
             findings += 1
 
     for site in unpinned_tools(root):
