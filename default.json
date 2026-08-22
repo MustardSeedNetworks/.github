@@ -45,7 +45,7 @@
       "groupName": "go toolchain"
     },
     {
-      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR. Both `typescript` and `@typescript/native-preview` are listed so the group keeps covering the compiler across the TS7 stable migration.",
+      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR. Both `typescript` and `@typescript/native-preview` are listed so the group keeps covering the compiler across the TS7 stable migration. `@vitest/**` is listed with `vitest` because the scoped packages declare an EXACT peer on it — a PR bumping either half alone fails ERESOLVE and can never go green, which stalled four PRs across three repos before it was noticed.",
       "matchManagers": [
         "npm"
       ],
@@ -60,6 +60,7 @@
         "@biomejs/biome",
         "vite",
         "vitest",
+        "@vitest/**",
         "@playwright/test",
         "playwright",
         "tailwindcss"
@@ -75,7 +76,7 @@
       "groupName": "github actions"
     },
     {
-      "description": "Node and npm move together \u2014 the pin lives in each repo's setup-node composite action and the two must not drift apart.",
+      "description": "Node and npm move together — the pin lives in each repo's setup-node composite action and the two must not drift apart.",
       "matchDepNames": [
         "node",
         "npm"
@@ -83,7 +84,7 @@
       "groupName": "node toolchain"
     },
     {
-      "description": "Always-latest: patch, minor and digest bumps auto-merge once CI is green. CI is the gate \u2014 every repo runs the full ci.yml plus blocking zizmor and govulncheck, so a bad bump fails rather than lands.",
+      "description": "Always-latest: patch, minor and digest bumps auto-merge once CI is green. CI is the gate — every repo runs the full ci.yml plus blocking zizmor and govulncheck, so a bad bump fails rather than lands.",
       "matchUpdateTypes": [
         "patch",
         "minor",
@@ -96,7 +97,7 @@
       "platformAutomerge": true
     },
     {
-      "description": "Majors are raised immediately but never auto-merged \u2014 a breaking change needs a human to read the changelog. This is the one place the always-latest policy stops short.",
+      "description": "Majors are raised immediately but never auto-merged — a breaking change needs a human to read the changelog. This is the one place the always-latest policy stops short.",
       "matchUpdateTypes": [
         "major"
       ],
@@ -110,7 +111,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Go tools installed as `go install <module>@<version>` in Makefiles, mk/ fragments and workflows. Renovate's gomod manager only reads go.mod, so without this these pins are invisible to it \u2014 and an invisible pin is worse than a floating one, because it goes stale silently. Covers the security gates (govulncheck, gitleaks, staticcheck) among others.",
+      "description": "Go tools installed as `go install <module>@<version>` in Makefiles, mk/ fragments and workflows. Renovate's gomod manager only reads go.mod, so without this these pins are invisible to it — and an invisible pin is worse than a floating one, because it goes stale silently. Covers the security gates (govulncheck, gitleaks, staticcheck) among others.",
       "matchStrings": [
         "go install\\s+(?<depName>[^\\s@]+)@(?<currentValue>v[0-9][^\\s'\";\\\\]*)"
       ],
@@ -119,6 +120,18 @@
         "^Makefile$",
         "^mk/.+\\.mk$",
         "^\\.github/workflows/.+\\.ya?ml$"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "biome.json pins the schema URL to the exact Biome version. The two are required to stay in step and nothing else checks it, so it drifts silently until an editor starts validating against the wrong schema. Renovate's npm manager cannot see a URL, hence this.",
+      "matchStrings": [
+        "https://biomejs\\.dev/schemas/(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)/schema\\.json"
+      ],
+      "depNameTemplate": "@biomejs/biome",
+      "datasourceTemplate": "npm",
+      "fileMatch": [
+        "(^|/)biome\\.json$"
       ]
     }
   ],
