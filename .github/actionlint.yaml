@@ -1,0 +1,24 @@
+# actionlint v1.7.12 models the `job` context as only
+# {check_run_id, container, services, status}. The runtime object is wider: a
+# job created from a reusable workflow also carries workflow_ref, workflow_sha,
+# workflow_repository and workflow_file_path. `job.workflow_sha` is documented
+# by GitHub and was verified here empirically before being relied on — a probe
+# run in this repo printed:
+#
+#   === toJSON(job) ===
+#   {
+#     "check_run_id": 95863145317,
+#     "workflow_ref": "MustardSeedNetworks/.github/.github/workflows/zz-probe-reusable.yml@refs/heads/ci/pin-conformance-script",
+#     "workflow_sha": "b257660062b860e08681a8a3aaf4e9d0b6fabfc4",
+#     "workflow_repository": "MustardSeedNetworks/.github",
+#     "workflow_file_path": ".github/workflows/zz-probe-reusable.yml",
+#     "status": "success"
+#   }
+#
+# and that sha was the reusable workflow's own commit, not the caller's. So this
+# ignores a stale linter schema, not a real finding. Drop it once actionlint
+# widens the type.
+paths:
+  .github/workflows/ci-conformance.yml:
+    ignore:
+      - 'property "workflow_sha" is not defined in object type'

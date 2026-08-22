@@ -42,11 +42,47 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check out the policy repo
+      # The script and the policy are pinned differently on purpose (#22).
+      #
+      # Callers write `ci-conformance.yml@<sha>  # vX.Y.Z`, which used to pin the
+      # workflow definition while the script and policy it ran were checked out
+      # from this repo's default branch — so the pin implied an immutability it
+      # did not provide, and a single commit here changed what executed in all
+      # four repos with no per-repo review and no tag bump.
+      #
+      # The SCRIPT is code. A bug in it reds the entire fleet, including on
+      # unrelated PRs, so it now resolves to the very commit the caller pinned.
+      # The POLICY is data, and rolling it out to four repos at once is the
+      # reason the shared policy exists at all — so it stays live.
+      - name: Resolve the pinned script ref
+        id: pin
+        env:
+          # job.workflow_sha is THIS reusable workflow's own commit. github.sha
+          # is the caller's, which would defeat the point.
+          WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          # An empty ref: is not an error to actions/checkout — it silently
+          # resolves to the default branch, i.e. exactly the behaviour being
+          # removed here. Fail loudly instead of regressing quietly.
+          if [ -z "$WORKFLOW_SHA" ]; then
+            echo "::error::job.workflow_sha is empty; refusing to fall back to the default branch"
+            exit 1
+          fi
+          echo "sha=$WORKFLOW_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the conformance script (pinned to this workflow)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: MustardSeedNetworks/.github
+          ref: ${{ steps.pin.outputs.sha }}
           path: .conformance
+          persist-credentials: false
+
+      - name: Check out the conformance policy (deliberately live)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/.github
+          path: .conformance-policy
           persist-credentials: false
 
       - name: Set up Go
@@ -61,4 +97,9 @@ jobs:
         run: go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}"
 
       - name: Check CI conformance
+        env:
+          # Without this the script reads the policy sitting beside itself,
+          # which is the pinned copy. The script refuses to start if this path
+          # is missing rather than skipping the policy checks silently.
+          CI_CONFORMANCE_POLICY_DIR: .conformance-policy/policy
         run: python3 .conformance/scripts/check-ci-conformance.py
