@@ -1,0 +1,158 @@
+# Technical terms that must appear verbatim in every secondary locale.
+#
+# Canonical for the fleet. Mirrors
+# msn-docs-internal/05-Engineering/I18N_GLOSSARY.md: standards, protocol
+# acronyms, units, product names and file formats are not translated.
+#
+# A repo needing a term the others do not can still point GLOSSARY_FILE at its
+# own list, but the default is this one — previously each repo carried a copy
+# and they drifted (only stem and niac had AirMapper, which is trellis's term).
+RFC 2544
+RFC 2889
+RFC 6349
+RFC 5357
+RFC 1918
+RFC 8200
+Y.1564
+Y.1731
+G.781
+G.8275
+802.1Q
+802.1X
+802.1AS
+802.1AB
+802.11ax
+802.11ac
+802.3
+MEF
+TSN
+DOCSIS
+ARP
+BGP
+BFD
+CDP
+DHCP
+DHCPv6
+ICMP
+ICMPv6
+IGMP
+ISIS
+LACP
+LLDP
+MPLS
+MSTP
+NDP
+NTP
+OSPF
+OSPFv3
+PIM
+RIP
+RSTP
+STP
+VRRP
+DNS
+FTP
+GRE
+GTP
+HTTP
+HTTPS
+IMAP
+IPSec
+SMTP
+SNMP
+SSH
+SSL
+STUN
+TCP
+TLS
+UDP
+mTLS
+EAP
+EAP-TLS
+JOSE
+JWT
+OAuth
+OAuth2
+OIDC
+PSK
+RADIUS
+SAML
+SAML2
+WebAuthn
+WPA2
+WPA3
+NetBIOS
+WINS
+mDNS
+ASN
+CIDR
+DSCP
+ECMP
+IP
+IPv4
+IPv6
+MAC
+MPLS
+MTU
+NAT
+PAT
+QoS
+VLAN
+VXLAN
+AP
+BSSID
+dBm
+EIRP
+ESSID
+GHz
+MHz
+RSSI
+SNR
+SSID
+bps
+Mbps
+Gbps
+Tbps
+B/s
+MB/s
+GB/s
+TB/s
+pps
+Mpps
+fps
+ns
+μs
+ms
+RTT
+Mustard Seed Networks
+The Seed
+The Stem
+NIAC
+Roots
+Canopy
+Shell
+Sap
+Harvest
+Reflector
+Benchmark
+ServiceTest
+TrafficGen
+Measure
+Certify
+TestMaster
+Pro
+Starter
+Free
+Enterprise
+Pro Bundle
+JSON
+YAML
+XML
+CSV
+PCAP
+PCAPNG
+TOML
+INI
+MIB
+BPF
+AirMapper

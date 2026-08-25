@@ -20,13 +20,20 @@ inputs:
     required: false
     default: 'ui/src'
   glossary-file:
-    description: 'Terms that must appear verbatim in secondary locales.'
+    description: >-
+      Terms that must appear verbatim in secondary locales. Defaults to the
+      canonical list shipped with this action; set only if a repo genuinely
+      needs its own.
     required: false
-    default: 'scripts/i18n/glossary.txt'
+    default: ''
   banned-file:
-    description: 'Vocabulary banned from customer-facing copy.'
+    description: >-
+      Vocabulary banned from customer-facing copy. Defaults to the canonical
+      list shipped with this action. This mirrors CLAUDE.md's banned list,
+      which has no per-product exception — overriding it per repo is what let
+      stem and niac stop banning "AI".
     required: false
-    default: 'scripts/i18n/banned-vocab.txt'
+    default: ''
   glossary-exceptions:
     description: 'Per-key allow-list for glossary false positives.'
     required: false
