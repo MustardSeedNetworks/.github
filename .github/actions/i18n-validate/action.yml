@@ -60,6 +60,13 @@ runs:
       shell: bash
       run: python3 "${{ github.action_path }}/../../../scripts/i18n/test-check-keys.py"
 
+    # es-fill.py never edits an existing Spanish value. That guarantee is the
+    # reason it is safe to run unattended, and it is not visible in a diff, so
+    # it is pinned by a test that runs wherever the gate runs.
+    - name: Self-test the Spanish gap filler
+      shell: bash
+      run: python3 "${{ github.action_path }}/../../../scripts/i18n/test-es-fill.py"
+
     - name: Validate i18n
       shell: bash
       env:

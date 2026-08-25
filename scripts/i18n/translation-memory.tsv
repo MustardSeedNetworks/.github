@@ -1,0 +1,179 @@
+# Canonical EN→ES pairs, one per line, tab-separated.
+#
+# Mirrors msn-docs-internal/05-Engineering/I18N_TRANSLATION_MEMORY.md the way
+# glossary.txt mirrors I18N_GLOSSARY.md: the doc is the source of truth, this
+# is the machine-readable form the tooling reads, because the docs repo is
+# private and not available to a shared CI action.
+#
+# Regenerate with scripts/i18n/extract-translation-memory.py.
+Save	Guardar
+Cancel	Cancelar
+Confirm	Confirmar
+Delete	Eliminar
+Remove	Eliminar
+Add	Añadir
+Create	Crear
+Edit	Editar
+Clone	Clonar
+Close	Cerrar
+Open	Abrir
+Start	Iniciar
+Stop	Detener
+Pause	Pausar
+Resume	Reanudar
+Restart	Reiniciar
+Refresh	Actualizar
+Reload	Recargar
+Retry	Reintentar
+Try again	Reintentar
+Search	Buscar
+Clear	Borrar
+Clear all	Borrar todo
+Clear search	Borrar búsqueda
+Clear filters	Borrar filtros
+Filter	Filtrar
+Download	Descargar
+Upload	Subir
+Import	Importar
+Export	Exportar
+Apply	Aplicar
+Discard	Descartar
+Submit	Enviar
+Browse	Examinar
+View	Ver
+Details	Detalles
+View details	Ver detalles
+Next	Siguiente
+Previous	Anterior
+Back	Atrás
+Switch to dark mode	Cambiar al modo oscuro
+Switch to light mode	Cambiar al modo claro
+Connected	Conectado
+Disconnected	Desconectado
+Connecting...	Conectando...
+Reconnecting...	Reconectando...
+Loading...	Cargando...
+Saving...	Guardando...
+Scanning...	Escaneando...
+Starting...	Iniciando...
+Stopping...	Deteniendo...
+Running	En ejecución
+Stopped	Detenido
+Paused	Pausado
+Active	Activo
+Inactive	Inactivo
+Idle	Inactivo
+Ready	Listo
+Pending	Pendiente
+Complete	Completado
+Failed	`Fallido` (adjective) / `Falló` (verb)
+Success	Éxito
+Warning	Advertencia
+Error	Error
+Info	Información
+Unknown	Desconocido
+Online	En línea
+Offline	Fuera de línea
+Never	Nunca
+Just now	Ahora mismo
+No data	Sin datos
+No data available	No hay datos disponibles
+Name	Nombre
+Hostname	Nombre de host
+Type	Tipo
+Status	Estado
+Address	Dirección
+IP Address	Dirección IP
+IP address	Dirección IP
+Interface	Interfaz
+Interfaces	Interfaces
+Network	Red
+Configuration	Configuración
+Config	Configuración
+Configuration File	Archivo de configuración
+YAML Configuration	Configuración YAML
+Version	Versión
+Build	Compilación
+Commit	Commit
+Build Time	Hora de compilación
+Settings	Configuración
+Help	Ayuda
+Sort	Ordenar
+Actions	Acciones
+Description	Descripción
+Summary	Resumen
+Total	Total
+Count	Recuento
+Last Updated	Última actualización
+Last Seen	Visto por última vez
+Created	Creado
+Created at	Creado
+Updated	Actualizado
+Updated at	Actualizado
+Size	Tamaño
+File	Archivo
+Files	Archivos
+Path	Ruta
+Port	Puerto
+Ports	Puertos
+Protocol	Protocolo
+Device	Dispositivo
+Devices	Dispositivos
+Packet	Paquete
+Packets	Paquetes
+Latency	Latencia
+Throughput	Rendimiento
+Jitter	Jitter
+Packet Loss	Pérdida de paquetes
+Channel	Canal
+Server	Servidor
+Gateway	Puerta de enlace
+Vendor	Fabricante
+System	Sistema
+Simulation	Simulación
+Alerts	Alertas
+Appearance	Apariencia
+Carrier	Portadora
+An unknown error occurred	Ocurrió un error desconocido
+An unexpected error occurred	Ocurrió un error inesperado
+Network error	Error de red
+Network error — check your connection	Error de red — verifique su conexión
+Request timed out	Tiempo de espera agotado
+Not found	No encontrado
+Permission denied	Permiso denegado
+Server error — please try again	Error del servidor — intente nuevamente
+Invalid request	Solicitud inválida
+This field is required	Este campo es obligatorio
+Invalid format	Formato inválido
+Invalid IP address	Dirección IP inválida
+Invalid port number	Número de puerto inválido
+Invalid hostname	Nombre de host inválido
+Invalid YAML	YAML inválido
+Failed to load data	Error al cargar los datos
+Failed to save changes	Error al guardar los cambios
+Failed to delete item	Error al eliminar el elemento
+Failed to upload file	Error al subir el archivo
+Unable to reach server. Please try again.	No se puede conectar al servidor. Por favor intente de nuevo.
+Passwords do not match	Las contraseñas no coinciden
+Password must be at least {{min}} characters	La contraseña debe tener al menos {{min}} caracteres
+Validation failed	Validación fallida
+Disconnected from server	Desconectado del servidor
+Something went wrong	Algo salió mal
+{{count}} device	{{count}} dispositivo
+{{count}} devices	{{count}} dispositivos
+{{count}} selected	{{count}} seleccionados
+Showing {{shown}} of {{total}} results	Mostrando {{shown}} de {{total}} resultados
+Showing {{shown}} of {{total}} packets	Mostrando {{shown}} de {{total}} paquetes
+Current tier: {{tier}}	Nivel actual: {{tier}}
+Requires the {{tier}} tier	Requiere el nivel {{tier}}
+This feature requires the {{tier}} tier	Esta función requiere el nivel {{tier}}
+{{feature}} is not available on your current tier	{{feature}} no está disponible en tu nivel actual
+Checking license…	Verificando licencia…
+© {{year}} Mustard Seed Networks. All rights reserved.	© {{year}} Mustard Seed Networks. Todos los derechos reservados.
+No matches for "{{query}}"	No hay coincidencias para "{{query}}"
+`{{count}} device` _(one)_	{{count}} dispositivo
+`{{count}} devices` _(other)_	{{count}} dispositivos
+`{{count}} item` _(one)_	{{count}} elemento
+`{{count}} items` _(other)_	{{count}} elementos
+`{{count}} packet` _(one)_	{{count}} paquete
+`{{count}} packets` _(other)_	{{count}} paquetes
