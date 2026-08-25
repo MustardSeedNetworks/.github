@@ -11,7 +11,7 @@ exiting 0 in both.
 Shared here — the checks themselves, which carry no product knowledge:
 
 | file | |
-|---|---|
+| --- | --- |
 | `validate.sh` | the gate; orchestrates every check below |
 | `check-keys.py` | `t()` / `<Trans i18nKey>` ↔ locale key cross-reference |
 | `check-source.py` | hardcoded English JSX text |
@@ -29,7 +29,7 @@ Every path is relative to the repo being checked. A repo on the standard
 Go-embedded layout needs to set nothing.
 
 | env var | default |
-|---|---|
+| --- | --- |
 | `I18N_REPO_ROOT` | `$PWD` — the repo being checked |
 | `LOCALES_DIR` | `internal/i18n/locales` |
 | `UI_SRC_DIR` | `ui/src` |
@@ -46,7 +46,8 @@ Go-embedded layout needs to set nothing.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@<pinned>
-      - uses: MustardSeedNetworks/.github/.github/actions/i18n-validate@<sha> # vX.Y.Z
+      # Pinned by SHA with a version comment; Renovate bumps it.
+      - uses: MustardSeedNetworks/.github/.github/actions/i18n-validate@<sha>
 ```
 
 A composite action rather than a reusable workflow, so the scripts arrive with
@@ -68,6 +69,42 @@ pinned SHA from that repo's own `ci.yml`, caches a checkout under
 There is exactly **one** pin per repo — the `uses:` line CI runs — so the local
 run and CI cannot disagree. Renovate bumps it; the shim follows. Once a SHA is
 cached the shim never touches the network.
+
+## Drafting the Spanish for a new key
+
+Key parity is a blocking check, so a missing `es` value is caught while the
+author is still writing the change — and the cost lands on them as "now
+hand-write Spanish for this". `es-fill.py` removes that friction by making the
+translation memory, the glossary and the ES style guide the default rather than
+a doc someone has to remember:
+
+```bash
+python3 scripts/i18n/es-fill.py            # report what is missing
+python3 scripts/i18n/es-fill.py --write    # fill what it can
+python3 scripts/i18n/es-fill.py --check    # exit 1 if fillable gaps remain
+```
+
+It fills two cases and refuses the third:
+
+| case | behaviour |
+| --- | --- |
+| English matches the translation memory | translated from it |
+| value is only glossary terms | copied verbatim |
+| anything else | **reported, not invented** |
+
+A novel sentence needs a translator. A tool that guessed would produce Spanish
+nobody checked, which is worse than an obvious gap — so `--check` passes when
+only human work remains, and fails only when a gap was mechanically fillable
+and someone skipped the step.
+
+**It never edits an existing Spanish value.** Filling a gap is mechanical and
+has a right answer; revising reviewed copy is neither, and the two do not
+belong in one tool. `test-es-fill.py` pins that guarantee.
+
+`translation-memory.tsv` mirrors
+`msn-docs-internal/05-Engineering/I18N_TRANSLATION_MEMORY.md` the way
+`glossary.txt` mirrors the glossary doc — the docs repo is private and a shared
+CI action cannot read it. Refresh it with `extract-translation-memory.py`.
 
 ## Adding a repo
 
