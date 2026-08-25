@@ -1,0 +1,72 @@
+name: 'i18n validate (shared gate)'
+description: >-
+  Run the fleet i18n gate — key parity, glossary preservation, interpolation
+  parity, plural completeness, banned vocabulary, t()/<Trans> key
+  cross-reference, and hardcoded English JSX text — from the single canonical
+  copy in MustardSeedNetworks/.github.
+
+  A composite action rather than a reusable workflow so the scripts arrive with
+  the action checkout (no second checkout, no ref to keep in sync) and so the
+  job stays in the calling repo's ci.yml — `ci-complete: needs: [i18n]` is
+  unchanged, and a repo with extra i18n steps keeps them in the same job.
+
+inputs:
+  locales-dir:
+    description: 'Locale root, relative to the repo. Contains en/ and es/.'
+    required: false
+    default: 'internal/i18n/locales'
+  ui-src-dir:
+    description: 'Frontend source root scanned for t() and <Trans> references.'
+    required: false
+    default: 'ui/src'
+  glossary-file:
+    description: 'Terms that must appear verbatim in secondary locales.'
+    required: false
+    default: 'scripts/i18n/glossary.txt'
+  banned-file:
+    description: 'Vocabulary banned from customer-facing copy.'
+    required: false
+    default: 'scripts/i18n/banned-vocab.txt'
+  glossary-exceptions:
+    description: 'Per-key allow-list for glossary false positives.'
+    required: false
+    default: 'scripts/i18n/glossary-exceptions.txt'
+  dynamic-prefixes:
+    description: >-
+      Key prefixes consumed by data-driven lookup rather than a literal t()
+      call, which the static analyzer cannot see.
+    required: false
+    default: 'scripts/i18n/dynamic-prefixes.txt'
+  semgrep-version:
+    description: >-
+      Pinned exact, per the dependency policy. The fleet SAST job pins its own
+      copy separately; this one only loads the i18n ruleset.
+    required: false
+    default: '1.168.0'
+
+runs:
+  using: composite
+  steps:
+    - name: Install semgrep (pinned)
+      shell: bash
+      run: pipx install "semgrep==${{ inputs.semgrep-version }}"
+
+    # The gate needs a gate. check-keys.py once printed `::error::` annotations
+    # while returning 0 for any finding count at or below 30, and an annotation
+    # does not fail a job — so it reported real findings and stayed green.
+    # Runs first so a broken checker is reported as a broken checker rather
+    # than as a clean repo.
+    - name: Self-test the i18n key checker
+      shell: bash
+      run: python3 "${{ github.action_path }}/../../../scripts/i18n/test-check-keys.py"
+
+    - name: Validate i18n
+      shell: bash
+      env:
+        LOCALES_DIR: ${{ inputs.locales-dir }}
+        UI_SRC_DIR: ${{ inputs.ui-src-dir }}
+        GLOSSARY_FILE: ${{ inputs.glossary-file }}
+        BANNED_FILE: ${{ inputs.banned-file }}
+        GLOSSARY_EXCEPTIONS: ${{ inputs.glossary-exceptions }}
+        DYNAMIC_PREFIXES: ${{ inputs.dynamic-prefixes }}
+      run: bash "${{ github.action_path }}/../../../scripts/i18n/validate.sh"

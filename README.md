@@ -9,6 +9,8 @@ The goal: make a fleet-wide change by editing **one file here**, not three repos
 |------|---------|
 | `default.json` | Renovate policy preset. Repos extend it with `{ "extends": ["github>MustardSeedNetworks/.github"] }`. Edit dependency/lockstep policy here. |
 | `.github/workflows/*.yml` (reusable) | Shared `workflow_call` CI gates, build, and release logic (added in Phase 3). Repos call them via `uses: MustardSeedNetworks/.github/.github/workflows/<name>.yml@<sha>`. |
+| `.github/actions/*` (composite) | Shared job steps. Repos call them via `uses: MustardSeedNetworks/.github/.github/actions/<name>@<sha>`. |
+| `scripts/i18n/` | The fleet i18n gate — one canonical copy of the checks; each repo keeps only its own glossary, banned vocabulary and locales. See `scripts/i18n/README.md`. |
 
 ## Discipline
 
