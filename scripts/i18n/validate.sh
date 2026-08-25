@@ -33,8 +33,14 @@ export I18N_REPO_ROOT="${I18N_REPO_ROOT:-$PWD}"
 # -----------------------------------------------------------------------------
 LOCALES_DIR="${LOCALES_DIR:-internal/i18n/locales}"
 UI_SRC_DIR="${UI_SRC_DIR:-ui/src}"
-GLOSSARY_FILE="${GLOSSARY_FILE:-scripts/i18n/glossary.txt}"
-BANNED_FILE="${BANNED_FILE:-scripts/i18n/banned-vocab.txt}"
+# Glossary and banned vocabulary default to the copies shipped beside this
+# script, not to one in the repo being checked. Both encode fleet policy —
+# banned-vocab mirrors CLAUDE.md's list, which has no per-product exception —
+# and a per-repo copy of each is exactly what drifted: seed banned `AI` and
+# `Codex` while stem and niac did not. A repo that genuinely needs its own can
+# still set these.
+GLOSSARY_FILE="${GLOSSARY_FILE:-$SCRIPT_DIR/glossary.txt}"
+BANNED_FILE="${BANNED_FILE:-$SCRIPT_DIR/banned-vocab.txt}"
 # Per-key allow-list for glossary-term false positives (e.g., key uses
 # "Pro" in the sense of "professional", not the license tier brand).
 # One `namespace.key.path` per line, comments with #.

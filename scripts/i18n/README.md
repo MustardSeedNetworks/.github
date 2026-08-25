@@ -18,10 +18,23 @@ Shared here — the checks themselves, which carry no product knowledge:
 | `semgrep-i18n.py` + `semgrep-i18n.yml` | banned `t('key', 'fallback')` forms |
 | `test-check-keys.py` | self-test for the checker |
 
-Owned by each product repo — the data the checks read:
+Also shared, because they encode fleet policy rather than product data:
 
-`scripts/i18n/glossary.txt` · `banned-vocab.txt` · `glossary-exceptions.txt` ·
-`dynamic-prefixes.txt` · the locale tree · the frontend source root.
+| file | |
+| --- | --- |
+| `banned-vocab.txt` | mirrors CLAUDE.md's banned list |
+| `glossary.txt` | mirrors `I18N_GLOSSARY.md` |
+
+Both were per-repo until 2026-08-25 and had drifted: seed banned `AI` and
+`Codex`, stem and niac did not, so the same string was policy-violating in one
+repo and fine in another. `BANNED_FILE` / `GLOSSARY_FILE` still accept an
+override for a repo that genuinely needs one.
+
+Owned by each product repo — the data that is genuinely local:
+
+`scripts/i18n/glossary-exceptions.txt` · `dynamic-prefixes.txt` · the locale
+tree · the frontend source root. Those are allow-lists for one codebase's
+lookups, not policy.
 
 ## Interface
 
