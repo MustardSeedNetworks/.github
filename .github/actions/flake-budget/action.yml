@@ -1,0 +1,61 @@
+name: 'Flake budget'
+description: 'Fail when a test run leaned on retries more than the budget allows'
+inputs:
+  report:
+    description: 'Playwright JSON report path (glob allowed; all matches are summed)'
+    required: false
+    default: 'ui/playwright-report/results.json'
+  budget:
+    description: 'Maximum number of tests allowed to pass only on retry'
+    required: false
+    default: '0'
+runs:
+  using: composite
+  steps:
+    # A test that fails and then passes on retry is reported as `flaky`, and the
+    # job exits 0. That is the whole problem: a retry-pass is indistinguishable
+    # from a pass in every signal anyone actually looks at, so real defects sit
+    # in main indefinitely. seed#1524 and seed#1593 were each closed against the
+    # same flaky spec, which then kept flaking, because nothing failed.
+    #
+    # This reads Playwright's own `stats.flaky` rather than parsing the human
+    # log, so it cannot drift with reporter formatting.
+    #
+    # Missing report is a FAILURE, not a pass: a run that produced no report
+    # either did not run or crashed, and "no evidence" must never read as "no
+    # flakes" -- the same failure mode as --passWithNoTests.
+    - name: Check flake budget
+      shell: bash
+      env:
+        REPORT_GLOB: ${{ inputs.report }}
+        BUDGET: ${{ inputs.budget }}
+      run: |
+        set -euo pipefail
+
+        shopt -s nullglob
+        reports=( $REPORT_GLOB )
+        if [ ${#reports[@]} -eq 0 ]; then
+          echo "::error::no Playwright JSON report matched '${REPORT_GLOB}' - cannot verify the flake budget"
+          exit 1
+        fi
+
+        total=0
+        for r in "${reports[@]}"; do
+          n=$(jq '.stats.flaky // 0' "$r")
+          echo "  ${r}: ${n} flaky"
+          total=$(( total + n ))
+        done
+
+        echo "flaky total: ${total} (budget ${BUDGET})"
+
+        if [ "$total" -gt "$BUDGET" ]; then
+          echo "::error::${total} test(s) passed only on retry; budget is ${BUDGET}."
+          echo "A retry-pass is a defect that happens to be intermittent. Fix the test or the code;"
+          echo "raising this budget hides the very signal it exists to surface."
+          for r in "${reports[@]}"; do
+            jq -r '.suites[]?|recurse(.suites[]?)|.specs[]?|select(any(.tests[]?; .status=="flaky"))|"  flaky: \(.file):\(.line) \(.title)"' "$r" 2>/dev/null || true
+          done
+          exit 1
+        fi
+
+        echo "Within flake budget."
