@@ -7,9 +7,14 @@
 # gopacket/pcap typecheck noise rather than findings.
 #
 # This image gives cgo a real Linux toolchain and the C headers those files need.
-FROM golang:1.26.6-bookworm
+# Both pins must track the fleet (CLAUDE.md "Required Versions"). A stale
+# golangci-lint here passes what CI rejects -- v2.13.1 added the embedlit
+# rule -- and a stale Go base reports stdlib-named errors that look like
+# code defects but are toolchain skew. Bump LINT_LINUX_TAG in the consuming
+# repo whenever either changes, so a rebuild is actually picked up.
+FROM golang:1.27.0-bookworm
 
-ARG GOLANGCI_VERSION=v2.12.2
+ARG GOLANGCI_VERSION=v2.13.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libpcap-dev \
