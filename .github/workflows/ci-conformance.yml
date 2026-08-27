@@ -23,12 +23,6 @@ on:
 
 permissions: {}
 
-env:
-  # The fleet pins one golangci-lint version everywhere, so this is not an input:
-  # a per-caller override would let a repo read its linters through a different
-  # version than it lints with. Bump in lockstep with the repos.
-  GOLANGCI_VERSION: v2.12.2
-
 jobs:
   ci-conformance:
     name: CI Conformance
@@ -42,10 +36,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # Pinned to this workflow's own commit. Callers pin the `uses:` at a SHA,
+      # but without a ref here the scripts that actually decide the verdict came
+      # from whatever was on this repo's default branch at run time — so the
+      # caller's pin bought nothing, and two runs of an identical commit could
+      # disagree. job_workflow_sha (not workflow_sha) is the reusable workflow's
+      # own commit; workflow_sha is the *caller's*, which is a SHA in a
+      # different repository and would not resolve here.
       - name: Check out the policy repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: MustardSeedNetworks/.github
+          ref: ${{ github.job_workflow_sha }}
           path: .conformance
           persist-credentials: false
 
@@ -54,10 +56,31 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Read the version out of the caller's own ci.yml rather than carrying a
+      # copy here. A hardcoded version drifts: this workflow sat on v2.12.2
+      # while all four repos moved to v2.13.1, so the linter floor was being
+      # read through a binary that did not know about the rules the repos
+      # actually lint with (v2.13.1 added `embedlit`). Fail closed — a repo
+      # whose pin cannot be found is a repo whose floor cannot be verified.
+      - name: Derive golangci-lint version from the calling repo
+        id: golangci
+        run: |
+          version=$(grep -A6 'golangci/golangci-lint-action@' .github/workflows/ci.yml \
+            | grep -m1 -oE 'version:[[:space:]]*v[0-9]+\.[0-9]+\.[0-9]+' \
+            | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+          if [ -z "$version" ]; then
+            echo "::error::could not find a pinned golangci-lint version in .github/workflows/ci.yml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Using golangci-lint $version (from the calling repo's ci.yml)"
+
       # The script reads the enabled linters from this binary. It is a hard
       # requirement, not an optimisation: without it the linter-floor check
       # reports "not verified" and fails, rather than passing silently.
       - name: Install golangci-lint
+        env:
+          GOLANGCI_VERSION: ${{ steps.golangci.outputs.version }}
         run: go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}"
 
       - name: Check CI conformance

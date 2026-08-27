@@ -12,8 +12,13 @@ name: Semgrep SAST (reusable)
 on:
   workflow_call:
 
+# Callers must grant security-events: write as well as contents: read — the
+# all-severity SARIF is published to the code-scanning tab. A caller that
+# grants only contents: read will fail at the upload step, deliberately: a
+# silently-skipped upload is how a security feed goes stale unnoticed.
 permissions:
   contents: read
+  security-events: write
 
 jobs:
   semgrep:
@@ -31,13 +36,70 @@ jobs:
       - name: Install Semgrep (pinned)
         run: pip install "semgrep==1.168.0"
 
-      - name: Run Semgrep (blocking on ERROR severity)
+      # One scan, two consumers. Visibility and gating are different questions:
+      # the old job ran with --severity ERROR, so WARNING/MEDIUM findings were
+      # never reported anywhere at all — contradicting the repos' own docs,
+      # which say they stay visible. Scanning once at every severity and
+      # deciding from the SARIF gives both without paying for a second scan.
+      - name: Run Semgrep (all severities, SARIF)
         run: |
           semgrep scan \
             --config p/golang \
             --config p/typescript \
             --config p/react \
             --config p/owasp-top-ten \
-            --severity ERROR \
-            --error \
+            --sarif \
+            --output semgrep-results.sarif \
             --metrics=off
+
+      # Not continue-on-error. This is the visibility half of the gate, and an
+      # upload that can fail silently is the defect being fixed here.
+      - name: Upload Semgrep results
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: semgrep-results.sarif
+          category: semgrep
+
+      # The blocking decision, read back from the SARIF the previous step just
+      # published — the same shape as the Trivy gate in each repo's ci.yml.
+      # Semgrep's ERROR severity maps to SARIF level "error".
+      - name: Fail on ERROR-severity findings
+        run: |
+          cat > /tmp/count-errors.py <<'PYEOF'
+          import json, sys
+
+          with open("semgrep-results.sarif") as fh:
+              sarif = json.load(fh)
+
+          errors = []
+          for run in sarif.get("runs", []):
+              driver = run.get("tool", {}).get("driver", {})
+              rules = {r.get("id"): r for r in driver.get("rules", [])}
+              for res in run.get("results", []):
+                  # A result may carry its own level; otherwise it inherits the
+                  # rule's default configuration.
+                  level = res.get("level")
+                  if level is None:
+                      rule = rules.get(res.get("ruleId"), {})
+                      level = rule.get("defaultConfiguration", {}).get("level")
+                  if level == "error":
+                      loc = ""
+                      locs = res.get("locations") or []
+                      if locs:
+                          phys = locs[0].get("physicalLocation", {})
+                          uri = phys.get("artifactLocation", {}).get("uri", "")
+                          line = phys.get("region", {}).get("startLine", "")
+                          loc = f"{uri}:{line}: "
+                      errors.append(f"{loc}{res.get('ruleId')}: "
+                                    f"{res.get('message', {}).get('text', '')}")
+
+          for e in errors:
+              print(e, file=sys.stderr)
+          print(len(errors))
+          PYEOF
+          count=$(python3 /tmp/count-errors.py)
+          echo "Semgrep ERROR-severity findings: $count"
+          if [ "$count" -gt 0 ]; then
+            echo "::error::Semgrep found $count ERROR-severity finding(s)"
+            exit 1
+          fi
