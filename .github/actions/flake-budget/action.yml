@@ -32,30 +32,57 @@ runs:
       run: |
         set -euo pipefail
 
-        shopt -s nullglob
-        reports=( $REPORT_GLOB )
-        if [ ${#reports[@]} -eq 0 ]; then
-          echo "::error::no Playwright JSON report matched '${REPORT_GLOB}' - cannot verify the flake budget"
-          exit 1
-        fi
+        # python3, not jq. jq ships on GitHub-hosted runners but NOT in the
+        # mcr.microsoft.com/playwright container images, and seed and stem both
+        # run E2E inside one -- so the first containerised caller failed with
+        # `jq: command not found` and exit 127. python3 is present in both.
+        python3 - "$BUDGET" $REPORT_GLOB <<'PYEOF'
+        import glob, json, sys
 
-        total=0
-        for r in "${reports[@]}"; do
-          n=$(jq '.stats.flaky // 0' "$r")
-          echo "  ${r}: ${n} flaky"
-          total=$(( total + n ))
-        done
+        budget = int(sys.argv[1])
+        patterns = sys.argv[2:]
 
-        echo "flaky total: ${total} (budget ${BUDGET})"
+        reports = []
+        for pattern in patterns:
+            reports.extend(sorted(glob.glob(pattern)))
 
-        if [ "$total" -gt "$BUDGET" ]; then
-          echo "::error::${total} test(s) passed only on retry; budget is ${BUDGET}."
-          echo "A retry-pass is a defect that happens to be intermittent. Fix the test or the code;"
-          echo "raising this budget hides the very signal it exists to surface."
-          for r in "${reports[@]}"; do
-            jq -r '.suites[]?|recurse(.suites[]?)|.specs[]?|select(any(.tests[]?; .status=="flaky"))|"  flaky: \(.file):\(.line) \(.title)"' "$r" 2>/dev/null || true
-          done
-          exit 1
-        fi
+        # A missing report is a FAILURE, not a pass: a run that produced no
+        # report either did not run or crashed, and "no evidence" must never
+        # read as "no flakes" -- the same failure mode as --passWithNoTests.
+        if not reports:
+            print(f"::error::no Playwright JSON report matched {patterns!r}"
+                  " - cannot verify the flake budget")
+            sys.exit(1)
 
-        echo "Within flake budget."
+        total = 0
+        flaky_specs = []
+        for path in reports:
+            with open(path) as fh:
+                data = json.load(fh)
+            n = data.get("stats", {}).get("flaky", 0)
+            print(f"  {path}: {n} flaky")
+            total += n
+
+            def walk(suites):
+                for suite in suites or []:
+                    for spec in suite.get("specs", []) or []:
+                        if any(t.get("status") == "flaky" for t in spec.get("tests", []) or []):
+                            flaky_specs.append(
+                                f"  flaky: {spec.get('file')}:{spec.get('line')} {spec.get('title')}"
+                            )
+                    walk(suite.get("suites"))
+
+            walk(data.get("suites"))
+
+        print(f"flaky total: {total} (budget {budget})")
+
+        if total > budget:
+            print(f"::error::{total} test(s) passed only on retry; budget is {budget}.")
+            print("A retry-pass is a defect that happens to be intermittent. Fix the test")
+            print("or the code; raising this budget hides the signal it exists to surface.")
+            for line in flaky_specs:
+                print(line)
+            sys.exit(1)
+
+        print("Within flake budget.")
+        PYEOF
