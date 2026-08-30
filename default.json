@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest: updates are raised as soon as they exist, and everything below a major auto-merges once CI is green.",
+  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest after a short soak: updates are raised once a release is three days old, and everything below a major auto-merges when CI is green. Security updates skip the soak entirely.",
   "extends": [
     "config:best-practices",
     ":semanticCommits",
@@ -13,6 +13,7 @@
   "schedule": [
     "at any time"
   ],
+  "minimumReleaseAge": "3 days",
   "prConcurrentLimit": 10,
   "prHourlyLimit": 0,
   "lockFileMaintenance": {
@@ -136,11 +137,13 @@
     }
   ],
   "vulnerabilityAlerts": {
+    "description": "Security fixes skip the three-day soak. The soak exists to avoid pulling a compromised publish before anyone notices; waiting on a fix for a KNOWN vulnerability trades a small risk for a larger one.",
     "labels": [
       "security",
       "dependencies"
     ],
     "automerge": true,
+    "minimumReleaseAge": null,
     "schedule": [
       "at any time"
     ]
