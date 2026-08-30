@@ -13,7 +13,7 @@
   "schedule": [
     "at any time"
   ],
-  "minimumReleaseAge": "3 days",
+  "minimumReleaseAge": "7 days",
   "prConcurrentLimit": 10,
   "prHourlyLimit": 0,
   "lockFileMaintenance": {
@@ -137,7 +137,7 @@
     }
   ],
   "vulnerabilityAlerts": {
-    "description": "Security fixes skip the three-day soak. The soak exists to avoid pulling a compromised publish before anyone notices; waiting on a fix for a KNOWN vulnerability trades a small risk for a larger one.",
+    "description": "Security fixes skip the seven-day soak. The soak exists to avoid pulling a compromised publish before anyone notices; waiting on a fix for a KNOWN vulnerability trades a small risk for a larger one.",
     "labels": [
       "security",
       "dependencies"
