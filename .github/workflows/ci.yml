@@ -1,0 +1,130 @@
+# Self-CI for the policy repository.
+#
+# This repo holds the fleet's Renovate preset, the reusable Semgrep, CodeQL-gate
+# and dependency-review workflows, and the conformance script every product
+# repo's CI calls. A mistake here breaks four repositories at once — and until
+# now nothing checked it: no workflow ran on a pull request, so the twelve
+# Python tests under scripts/i18n/ had never been executed by CI, and a typo in
+# default.json would have reached Renovate before anyone noticed.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Policy scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      # These test files exist in the tree and have never been run by CI.
+      - name: Run the i18n script tests
+        run: |
+          set -euo pipefail
+          python3 scripts/i18n/test-check-keys.py
+          python3 scripts/i18n/test-es-fill.py
+
+      # A syntax error in the conformance script fails every product repo's
+      # ci-conformance job, so compiling it here turns that into a local failure.
+      - name: Compile every policy script
+        run: python3 -m compileall -q scripts/
+
+  renovate-config:
+    name: Renovate preset
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No setup-node composite in this repo (it holds apt-install,
+      # flake-budget and i18n-validate only), so pin the action directly at the
+      # fleet's Node version rather than taking whatever the runner ships.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.8.1"
+
+      # default.json is the fleet's dependency policy. Renovate silently
+      # ignores a config it cannot parse, so a typo here would not fail
+      # anywhere — it would just stop the rules applying, across four repos.
+      - name: Validate default.json
+        run: npx --yes --package renovate@42.5.2 -- renovate-config-validator default.json
+
+  workflow-lint:
+    name: Workflow Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+
+      - name: Run actionlint
+        run: |
+          set -euo pipefail
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          # SC2129 is the fleet-standard style exclusion.
+          #
+          # The second ignore is a tool gap, not a suppressed finding:
+          # `github.job_workflow_sha` is a documented context property for
+          # reusable workflows, and ci-conformance.yml uses it to pin its own
+          # checkout to the reusable workflow's commit — which is a real
+          # security property, not a stylistic choice. actionlint v1.7.12, the
+          # current release, does not have it in its context schema. Remove
+          # this the moment a release does.
+          actionlint \
+            -ignore 'SC2129' \
+            -ignore 'property "job_workflow_sha" is not defined' \
+            -color
+
+      - name: Run zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pipx install zizmor==1.29.0
+          zizmor --min-severity high --color always .github/workflows/
+
+  ci-complete:
+    name: CI Complete
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - python
+      - renovate-config
+      - workflow-lint
+    if: always()
+    steps:
+      - name: Verify upstream results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq '.'
+          if ! echo "$RESULTS" | jq -e 'to_entries | map(.value.result) | all(. == "success" or . == "skipped")' >/dev/null; then
+            echo "::error::One or more required CI jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All required CI jobs passed (or were intentionally skipped)."
