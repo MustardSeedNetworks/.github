@@ -1,0 +1,97 @@
+# Fleet-shared gate on open CodeQL security alerts.
+#
+# CodeQL's own job reports success when the *analysis* succeeds — whether or not
+# it found anything. So a repository can carry open High alerts indefinitely
+# while every check is green, which is the gap this closes: it reads the alerts
+# back and fails when any High or Critical one is open on the default branch.
+#
+# Scoped to CodeQL deliberately. The code-scanning tab also carries Scorecard
+# results at High severity — TokenPermissionsID, BranchProtectionID,
+# CodeReviewID, MaintainedID — which are advisory *scores*, not vulnerabilities,
+# and several of them encode decisions this org has made on purpose (no required
+# reviewer with two developers; branch protection unavailable on private repos
+# under the current plan). Gating on "any High alert" would block every merge on
+# a score. Gating on CodeQL means a red build is a finding in the code.
+#
+# Dismissed alerts do not count. A false positive is closed by dismissing it
+# with evidence in the dismissal comment, not by lowering this threshold.
+name: CodeQL Alert Gate (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      severities:
+        description: "Comma-separated CodeQL security severities that fail the build."
+        type: string
+        default: "critical,high"
+
+permissions: {}
+
+jobs:
+  codeql-alert-gate:
+    name: CodeQL Alert Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Reading code-scanning alerts needs security-events; nothing here writes.
+      security-events: read
+    steps:
+      - name: Fail on open CodeQL alerts at the gated severities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SEVERITIES: ${{ inputs.severities }}
+        run: |
+          set -euo pipefail
+
+          # --paginate: a repository with more than one page of alerts must not
+          # silently pass because the gated one sat on page two.
+          gh api --paginate \
+            "repos/${REPO}/code-scanning/alerts?state=open&per_page=100" \
+            > alerts.json
+
+          python3 - <<'PY'
+          import json, os, sys
+
+          severities = {
+              s.strip().lower()
+              for s in os.environ["SEVERITIES"].split(",")
+              if s.strip()
+          }
+          if not severities:
+              sys.exit("::error::no severities configured; refusing to pass vacuously")
+
+          with open("alerts.json") as fh:
+              alerts = json.load(fh)
+
+          # gh --paginate concatenates pages as separate JSON arrays only when
+          # asked for --slurp; here it merges, but be explicit rather than
+          # assuming the shape.
+          if isinstance(alerts, dict):
+              alerts = [alerts]
+
+          gated = [
+              a for a in alerts
+              if (a.get("tool", {}).get("name") == "CodeQL")
+              and ((a.get("rule", {}).get("security_severity_level") or "").lower() in severities)
+          ]
+
+          print(f"open alerts: {len(alerts)}; open CodeQL alerts at {sorted(severities)}: {len(gated)}")
+
+          for a in gated:
+              loc = a.get("most_recent_instance", {}).get("location", {})
+              print(
+                  f"::error::CodeQL {a['rule']['security_severity_level']} "
+                  f"{a['rule']['id']} at {loc.get('path','?')}:{loc.get('start_line','?')} "
+                  f"-- {a.get('html_url','')}"
+              )
+
+          if gated:
+              sys.exit(
+                  f"{len(gated)} open CodeQL alert(s) at {sorted(severities)}. "
+                  "Fix the defect, or dismiss the alert with evidence in the "
+                  "dismissal comment. Do not widen this gate."
+              )
+
+          print("No open CodeQL alerts at the gated severities.")
+          PY
