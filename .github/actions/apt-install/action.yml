@@ -10,6 +10,15 @@ inputs:
     description: 'How many times to try before failing.'
     required: false
     default: '2'
+  retry-delay-seconds:
+    description: >-
+      Base seconds to wait between attempts; the wait is this multiplied by the
+      attempt number. The default of 10 covers a transient error. Raise it on
+      the release path, where the thing being waited out is a mirror OUTAGE
+      lasting minutes rather than a single bad response — two attempts ten
+      seconds apart cannot span one, and a failed release is expensive.
+    required: false
+    default: '10'
   command-timeout:
     description: >-
       Seconds any single apt invocation may run before it is killed. Raise for
@@ -42,6 +51,7 @@ runs:
         NO_RECOMMENDS: ${{ inputs.no-install-recommends }}
         CUSTOM_CMD: ${{ inputs.command }}
         ATTEMPTS: ${{ inputs.attempts }}
+        RETRY_DELAY: ${{ inputs.retry-delay-seconds }}
         CMD_TIMEOUT: ${{ inputs.command-timeout }}
         DO_UPDATE: ${{ inputs.update }}
       # Three distinct failures are bounded here, and they pull in different
@@ -58,6 +68,17 @@ runs:
       # patient wait (DPkg::Lock::Timeout 240) rather than several short ones,
       # and a default of two attempts — the second is for a transient mirror
       # error, not for the lock.
+      #
+      # MIRROR OUTAGE: distinct from a stalled connection. The mirror answers,
+      # but wrongly, for MINUTES. niac's v0.94.46 release went red this way:
+      # both attempts failed 4.5 minutes apart against an unreachable mirror,
+      # and a rerun with no code change passed. Bounded waits do not help --
+      # each attempt fails fast and correctly -- and neither does a third
+      # attempt ten seconds later. What spans it is a longer wait BETWEEN
+      # attempts, which is what retry-delay-seconds is for. It is left at 10 by
+      # default because on a normal CI job failing fast is worth more than
+      # riding out an outage; the release path sets it higher.
+      # See MustardSeedNetworks/niac-go#1364.
       #
       # ORPHANED apt-get: the reason the two above were not enough. The lock
       # holder was us. A slow mirror pushes the download past command-timeout,
@@ -166,7 +187,7 @@ runs:
           echo "apt install attempt ${attempt}/${ATTEMPTS} failed"
           clear_lock_holder
           if [ "$attempt" -lt "$ATTEMPTS" ]; then
-            sleep $((attempt * 10))
+            sleep $((attempt * RETRY_DELAY))
           fi
           attempt=$((attempt + 1))
         done
