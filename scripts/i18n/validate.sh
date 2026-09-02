@@ -3,6 +3,11 @@
 #
 # Run from the product repo root. Exits 0 if all checks pass, 1 on any failure.
 #
+# Covers the locale files AND, where the repo defines them, the same
+# `npm run i18n:lint / i18n:check / i18n:test` extraction scripts CI runs — so
+# a green run here means a green i18n job there. `--quick` skips the npm half
+# and says so.
+#
 # This is the single canonical copy, shared from MustardSeedNetworks/.github.
 # It carries no repo-specific knowledge: everything that differs between
 # products is data the calling repo owns (locales, glossary, banned vocabulary,
@@ -446,6 +451,71 @@ check_locked_versions() {
 }
 
 # -----------------------------------------------------------------------------
+# Extraction gate (npm i18n:lint / i18n:check / i18n:test)
+# -----------------------------------------------------------------------------
+# Without this the script reported OK while CI failed. Everything above checks
+# the locale files as they stand; none of it re-runs the EXTRACTOR, so a change
+# that leaves the catalogues stale passes here and fails CI with
+# "i18n catalogs are out of date: pages.json" (#1342). One command should mean
+# one answer, so the same npm scripts CI runs are run here.
+#
+# Conditional by design: only repos that own an extraction config define these
+# scripts (niac-go today; seed, stem and trellis do not). A repo without them
+# is reported as such rather than silently skipped, so "not run" is never
+# mistaken for "passed".
+check_extraction_gate() {
+  printf "\n${B}=== Extraction gate (npm i18n:*) ===${N}\n"
+
+  local ui_dir="${UI_SRC_DIR%/src}"
+  local pkg="$I18N_REPO_ROOT/$ui_dir/package.json"
+
+  if [ ! -f "$pkg" ]; then
+    warn "no $ui_dir/package.json — extraction gate not run"
+    return
+  fi
+
+  if ! command -v npm >/dev/null 2>&1; then
+    warn "npm not on PATH — extraction gate not run"
+    return
+  fi
+
+  local scripts=(i18n:lint i18n:check i18n:test)
+  local present=() missing=()
+  local name
+  for name in "${scripts[@]}"; do
+    if jq -e --arg s "$name" '.scripts[$s] // empty' "$pkg" >/dev/null 2>&1; then
+      present+=("$name")
+    else
+      missing+=("$name")
+    fi
+  done
+
+  if [ ${#present[@]} -eq 0 ]; then
+    warn "this repo defines none of: ${scripts[*]} — extraction gate not run"
+    return
+  fi
+  if [ ${#missing[@]} -gt 0 ]; then
+    warn "not defined in this repo, so not run: ${missing[*]}"
+  fi
+
+  local failures=0
+  for name in "${present[@]}"; do
+    local output
+    if output=$( (cd "$I18N_REPO_ROOT/$ui_dir" && npm run --silent "$name") 2>&1 ); then
+      ok "npm run $name"
+    else
+      fail "npm run $name failed"
+      printf '%s\n' "$output" | sed 's/^/    /'
+      annotate "$ui_dir/package.json" "npm run $name failed; run it locally to reproduce"
+      failures=$((failures + 1))
+    fi
+  done
+
+  [ "$failures" -eq 0 ] && return 0
+  return 1
+}
+
+# -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
 QUICK=0
@@ -478,6 +548,13 @@ run_check check_plural_completeness
 run_check check_key_usage
 run_check check_locked_versions
 run_check check_hardcoded_jsx
+
+# Last because it is the slowest — it shells out to npm. --quick skips it.
+if [ "$QUICK" -eq 0 ]; then
+  run_check check_extraction_gate
+elif [ -z "$ONLY_CHECK" ]; then
+  printf "\n${Y}--quick: extraction gate not run (npm i18n:*)${N}\n"
+fi
 
 # -----------------------------------------------------------------------------
 # Summary
