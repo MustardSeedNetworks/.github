@@ -20,6 +20,19 @@ Checks
    A required context nothing emits wedges every merge.
 4. The fleet status vocabulary has not drifted (policy/status-vocabulary.txt).
    Two vocabularies were live at once and disagreed on the same screen.
+5. ci.yml sets up Go and Node through this repo's composite actions, not the
+   stock ones, and hardcodes no `node-version:`. The Node pin lives in one
+   file per repo; a workflow that bypasses it pins a second, silently.
+6. govulncheck does not carry `continue-on-error`. It is a hard fleet gate;
+   the flag turns it into a report nobody reads.
+7. A `go build` in CI injects the same ldflags `make build` does. Raw
+   `go build` produces a binary whose /__version reports "unknown", which is
+   a silent violation of the build contract that no test can see.
+8. Main pushes get a per-commit concurrency group. `cancel-in-progress` off
+   on main protects a *running* build but not a pending one: GitHub keeps one
+   pending run per group and cancels the older when a newer arrives, so a
+   merge burst silently drops main runs — and release-please, gated on
+   workflow_run success, then skips those commits entirely.
 
 Exit 0 clean, 1 on any finding.
 """
@@ -281,6 +294,141 @@ def unpinned_tools(root: Path) -> list[str]:
     return hits
 
 
+def composite_setup(root: Path) -> list[str]:
+    """ci.yml must use this repo's composite setup actions, not the stock ones.
+
+    The Go and Node versions live in `.github/actions/setup-{go,node}`, one
+    file per concern per repo. A ci.yml job that calls `actions/setup-node`
+    directly has to name a version, which is then a second pin that drifts
+    from the first in silence. Other workflows that call setup once
+    (release.yml, dead-code.yml) may use the stock action -- the indirection
+    is not worth it for a one-off -- so this is scoped to ci.yml.
+    """
+    ci = root / ".github/workflows/ci.yml"
+    if not ci.exists():
+        return []
+    hits = []
+    for i, line in enumerate(ci.read_text(errors="ignore").splitlines(), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        m = re.search(r"uses:\s*actions/setup-(go|node)@", line)
+        if m:
+            hits.append(f".github/workflows/ci.yml:{i}: uses stock "
+                        f"actions/setup-{m.group(1)}; use ./.github/actions/setup-{m.group(1)}")
+        if re.search(r"^\s*node-version:", line):
+            hits.append(f".github/workflows/ci.yml:{i}: hardcodes node-version; "
+                        f"the pin belongs in .github/actions/setup-node")
+    return hits
+
+
+def govulncheck_advisory(root: Path) -> list[str]:
+    """govulncheck must be able to fail the build.
+
+    It is a hard gate fleet-wide and has caught a reachable CVE for real
+    (GO-2026-6354/6355 on niac). `continue-on-error` on the step or its job
+    turns that into an annotation, which blocks nothing.
+    """
+    ci = root / ".github/workflows/ci.yml"
+    if not ci.exists():
+        return []
+    lines = ci.read_text(errors="ignore").splitlines()
+    hits = []
+    for i, line in enumerate(lines):
+        if "govulncheck" not in line or line.lstrip().startswith("#"):
+            continue
+        # Look for continue-on-error in the enclosing step: from the step's
+        # `- name:`/`- uses:` marker down to the next one.
+        start = i
+        while start > 0 and not re.match(r"\s*-\s+(name|uses|run):", lines[start]):
+            start -= 1
+        end = i + 1
+        while end < len(lines) and not re.match(r"\s*-\s+(name|uses|run):", lines[end]):
+            end += 1
+        for j in range(start, min(end, len(lines))):
+            if re.search(r"continue-on-error:\s*true", lines[j]):
+                hits.append(f".github/workflows/ci.yml:{j + 1}: govulncheck runs "
+                            f"continue-on-error; it is a hard fleet gate")
+                break
+    return hits
+
+
+def ldflags_parity(root: Path) -> list[str]:
+    """A `go build` that produces a shipped binary must inject the version
+    ldflags `make build` does.
+
+    Every build embeds version/commit/buildTime/uiBuildHash, and /__version is
+    what deployment validation reads. A raw `go build -o` in ci.yml produces a
+    binary reporting "unknown" -- green checks, broken build contract, and no
+    test can see it because the binary under test is built the same wrong way.
+
+    Scoped to builds that write an artifact (`-o`). `go build ./...` with no
+    output is a compile check -- seed's "Deterministic build check" and its
+    CGO-free variant are exactly that, and they need no ldflags. Continuation
+    lines are joined first: every real build in the fleet puts `-ldflags` on
+    the line after `go build -trimpath \\`, so a line-at-a-time check reports
+    each one as a violation of the rule it satisfies.
+    """
+    ci = root / ".github/workflows/ci.yml"
+    if not ci.exists():
+        return []
+    hits = []
+    lines = ci.read_text(errors="ignore").splitlines()
+    i = 0
+    while i < len(lines):
+        start = i
+        joined = lines[i]
+        while joined.rstrip().endswith("\\") and i + 1 < len(lines):
+            i += 1
+            joined = joined.rstrip()[:-1] + " " + lines[i].strip()
+        i += 1
+        st = joined.lstrip()
+        if st.startswith("#") or "go build" not in st:
+            continue
+        if " -o " not in st or "-o /dev/null" in st:
+            # No output, or discarded: a compile/cross-compile check rather
+            # than a binary anyone runs. seed's "Deterministic build check"
+            # and stem's darwin/arm64 cross-compile are both of this shape.
+            continue
+        if "-ldflags" in st or "LDFLAGS" in st:
+            continue
+        hits.append(f".github/workflows/ci.yml:{start + 1}: `go build -o` without "
+                    f"-ldflags; /__version would report \"unknown\"")
+    return hits
+
+
+def main_concurrency(root: Path) -> list[str]:
+    """Main pushes need a per-commit concurrency group.
+
+    `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}` reads as
+    protecting main and does not: GitHub keeps at most one PENDING run per
+    group and cancels the older one when a newer arrives, so a merge-queue
+    burst kills intermediate main runs while they are still queued -- zero
+    jobs, no red check, nothing to retry. release-please is gated on
+    `workflow_run.conclusion == 'success'` and is therefore skipped for every
+    one of those commits. That is how stem's v0.24.47 went missing while its
+    three siblings released from the same batch.
+
+    Keying main by SHA gives every commit its own group.
+    """
+    ci = root / ".github/workflows/ci.yml"
+    if not ci.exists():
+        return []
+    text = ci.read_text(errors="ignore")
+    m = re.search(r"^concurrency:\n((?:[ \t]+.*\n|\n)*)", text, re.M)
+    if not m:
+        return [".github/workflows/ci.yml: no top-level concurrency block"]
+    block = m.group(1)
+    group = [l for l in block.splitlines()
+             if l.lstrip().startswith("group:") and not l.lstrip().startswith("#")]
+    if not group:
+        return [".github/workflows/ci.yml: concurrency block has no group"]
+    if "github.sha" not in group[0]:
+        return [".github/workflows/ci.yml: concurrency group is not keyed by "
+                "github.sha on main; a merge burst cancels pending main runs "
+                "and release-please skips those commits"]
+    return []
+
+
 def main() -> int:
     root = Path.cwd()
     repo = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -309,6 +457,12 @@ def main() -> int:
         fail(f"{site}: `go install ...@latest` — pin it; an unpinned gate can "
              f"change behaviour with no code change")
         findings += 1
+
+    for check in (composite_setup, govulncheck_advisory, ldflags_parity,
+                  main_concurrency):
+        for msg in check(root):
+            fail(msg)
+            findings += 1
 
     if repo:
         sa = repo_settings(repo)

@@ -42,6 +42,12 @@ jobs:
           python3 scripts/i18n/test-check-keys.py
           python3 scripts/i18n/test-es-fill.py
 
+      # The conformance script gates every product repo, so a rule that
+      # silently stops firing weakens all four at once. These fixtures assert
+      # each build-contract rule still fails a violating ci.yml.
+      - name: Run the CI conformance tests
+        run: python3 scripts/test-check-ci-conformance.py
+
       # A syntax error in the conformance script fails every product repo's
       # ci-conformance job, so compiling it here turns that into a local failure.
       - name: Compile every policy script
