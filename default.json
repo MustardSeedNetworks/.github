@@ -98,6 +98,15 @@
       "platformAutomerge": true
     },
     {
+      "description": "The markdown gate is one tool pinned in three places per repo: the CI action, mk/lint.mk (MARKDOWNLINT_CLI2_VERSION) and the pre-commit hook. They must move together or the local run becomes a false clear against CI (MD060 landed in 0.23 and stalled three PRs on 2026-09-05).",
+      "matchPackageNames": [
+        "markdownlint-cli2",
+        "DavidAnson/markdownlint-cli2",
+        "DavidAnson/markdownlint-cli2-action"
+      ],
+      "groupName": "markdownlint"
+    },
+    {
       "description": "Majors are raised immediately but never auto-merged — a breaking change needs a human to read the changelog. This is the one place the always-latest policy stops short.",
       "matchUpdateTypes": [
         "major"
@@ -134,6 +143,18 @@
       "fileMatch": [
         "(^|/)biome\\.json$"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "mk/lint.mk pins the markdownlint-cli2 version that `make lint-md` runs through npx. Keeps it in the markdownlint group with the CI action and the pre-commit hook.",
+      "matchStrings": [
+        "MARKDOWNLINT_CLI2_VERSION\\s*:=\\s*(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ],
+      "depNameTemplate": "markdownlint-cli2",
+      "datasourceTemplate": "npm",
+      "fileMatch": [
+        "^mk/lint\\.mk$"
+      ]
     }
   ],
   "vulnerabilityAlerts": {
@@ -147,5 +168,8 @@
     "schedule": [
       "at any time"
     ]
+  },
+  "pre-commit": {
+    "enabled": true
   }
 }
