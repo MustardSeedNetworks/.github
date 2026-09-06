@@ -77,6 +77,13 @@
       "groupName": "github actions"
     },
     {
+      "description": "pre-commit hook revs move as one PR per repo. Enabling the manager alone raised three PRs per repo in one tick and two of them ejected queued PRs; the hooks are dev tooling with no independent risk.",
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "groupName": "pre-commit hooks"
+    },
+    {
       "description": "Node and npm move together — the pin lives in each repo's setup-node composite action and the two must not drift apart.",
       "matchDepNames": [
         "node",
