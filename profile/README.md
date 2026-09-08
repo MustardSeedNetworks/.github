@@ -20,9 +20,9 @@ engineered for engineers who need deterministic, standards-aligned results.
 | **NIAC** | Network In A Can: a single-binary device simulator that speaks real protocols (ARP, DHCP, DNS, SNMP, LLDP, CDP, STP, and more) on real interfaces for testing, training, and lab work. | [niac-go](https://github.com/MustardSeedNetworks/niac-go) |
 | **Trellis** | Wi-Fi site survey, heatmaps, and predictive planning. Pre-alpha. | [trellis](https://github.com/MustardSeedNetworks/trellis) |
 
-Every product ships as one Go binary with an embedded web UI, runs on macOS,
-Linux, and Windows, and validates licenses offline. Nothing phones home, so
-air-gapped clinical, industrial, and government networks are first-class.
+Every product ships as one Go binary with an embedded web UI and runs on
+macOS, Linux, and Windows. Nothing phones home, so air-gapped clinical,
+industrial, and government networks are first-class.
 
 ## Shared infrastructure
 
@@ -33,14 +33,15 @@ air-gapped clinical, industrial, and government networks are first-class.
 
 ## Licensing
 
-Products are **source-available** under the Business Source License 1.1.
-Free tiers are free to use; Pro tiers are licensed per year with keys that
-validate locally. See each repo's `LICENSE` for the exact terms.
+Every repository is **source-available** under the Business Source License
+1.1; see each repo's `LICENSE` for the exact terms. Seed and Stem have a Free
+tier and a Pro tier licensed per year, with keys that validate offline on the
+device. NIAC ships as one unrestricted binary with no runtime tier.
 
 ## Security
 
-Report vulnerabilities privately through the affected repo's
-[security advisories](https://github.com/MustardSeedNetworks/seed/security/advisories/new)
-page or by email to `kris.armstrong@icloud.com`. See [SECURITY.md](https://github.com/MustardSeedNetworks/.github/blob/main/SECURITY.md).
+Report vulnerabilities privately through the affected repository's
+*Security* tab (draft a new advisory) or by email to
+`kris.armstrong@icloud.com`. See [SECURITY.md](https://github.com/MustardSeedNetworks/.github/blob/main/SECURITY.md).
 
 <p align="center"><a href="https://mustardseednetworks.com">mustardseednetworks.com</a></p>
