@@ -8,6 +8,11 @@
 #   RollupState / RecordState — the design system's STATE layer. What the
 #     product concluded about a page or a record. `ok` is deliberately calm,
 #     `unknown` means we cannot say and prints em dashes.
+#     Products with an intentional inactive state may also declare `idle`:
+#     the daemon is reachable and confirms no activity is running. It is
+#     neutral, not a health verdict. Never use it for loading, failed reads,
+#     missing observations, or unknown state; those still roll up as `unknown`.
+#     Existing products without this state keep the four-member union.
 #
 #   Status — the CARD layer. A view of a backend diagnostic verdict, plus the
 #     card's own fetch lifecycle. In seed these strings ARE the wire format
@@ -25,8 +30,10 @@
 # all three repos before being removed.
 #
 # Format: <TAB>-separated. Name, then the exact single-line definition.
-# A repo need not declare all three (trellis has no cards). What it declares
-# must match byte-for-byte.
+# A repeated name lists an explicitly permitted alternative definition.
+# A repo need not declare all three (trellis has no cards). Each declaration
+# must match one listed definition byte-for-byte; no other members are allowed.
 Status	export type Status = 'success' | 'warning' | 'error' | 'unknown' | 'loading';
 RollupState	export type RollupState = 'ok' | 'warn' | 'crit' | 'unknown';
+RollupState	export type RollupState = 'ok' | 'warn' | 'crit' | 'unknown' | 'idle';
 RecordState	export type RecordState = RollupState;

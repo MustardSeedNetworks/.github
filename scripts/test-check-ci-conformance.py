@@ -67,7 +67,7 @@ jobs:
 
 
 class ConformanceChecks(unittest.TestCase):
-    def run_checker(self, ci: str) -> tuple[int, str]:
+    def run_checker(self, ci: str, status_definitions: str = "") -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".github/workflows").mkdir(parents=True)
@@ -80,6 +80,9 @@ class ConformanceChecks(unittest.TestCase):
             (root / "scripts").mkdir()
             (root / "scripts/check-banned-vocabulary.py").write_text("")
             (root / "scripts/check-file-size.sh").write_text("")
+            if status_definitions:
+                (root / "ui/src").mkdir(parents=True)
+                (root / "ui/src/state.ts").write_text(status_definitions)
             p = subprocess.run([sys.executable, str(CHECKER)], cwd=root,
                                capture_output=True, text=True)
             return p.returncode, p.stdout + p.stderr
@@ -144,6 +147,52 @@ class ConformanceChecks(unittest.TestCase):
             "  group: ${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}",
             "  group: ${{ github.workflow }}-${{ github.ref }}")
         self.assertFires(ci, "not keyed by github.sha")
+
+    def test_rollup_accepts_only_the_two_approved_vocabularies(self) -> None:
+        for members in (
+            "'ok' | 'warn' | 'crit' | 'unknown'",
+            "'ok' | 'warn' | 'crit' | 'unknown' | 'idle'",
+        ):
+            with self.subTest(members=members):
+                _, out = self.run_checker(
+                    GOOD_CI,
+                    f"export type RollupState = {members};\n"
+                    "export type RecordState = RollupState;\n",
+                )
+                self.assertNotIn("fleet vocabulary", out)
+
+    def test_rollup_rejects_missing_or_unapproved_states(self) -> None:
+        for members in (
+            "'ok' | 'warn' | 'crit' | 'idle'",
+            "'ok' | 'warn' | 'crit' | 'unknown' | 'idle' | 'busy'",
+            "'ok' | 'warn' | 'crit' | 'unknown' | 'loading'",
+            "'ok' | 'warn' | 'crit' | 'unknown' | 'info'",
+            "'ok' | 'warn' | 'crit' | 'unknown' | 'idle' | 'idle'",
+            "string",
+        ):
+            with self.subTest(members=members):
+                code, out = self.run_checker(
+                    GOOD_CI, f"export type RollupState = {members};\n"
+                )
+                self.assertNotEqual(code, 0)
+                self.assertIn("`RollupState` has drifted", out)
+
+    def test_card_status_keeps_its_existing_vocabulary(self) -> None:
+        definition = (
+            "export type Status = 'success' | 'warning' | 'error' | 'unknown' | 'loading'"
+        )
+        _, out = self.run_checker(GOOD_CI, definition + ";\n")
+        self.assertNotIn("fleet vocabulary", out)
+        code, out = self.run_checker(GOOD_CI, definition + " | 'idle';\n")
+        self.assertNotEqual(code, 0)
+        self.assertIn("`Status` has drifted", out)
+
+    def test_record_state_remains_an_alias(self) -> None:
+        code, out = self.run_checker(
+            GOOD_CI, "export type RecordState = RollupState | 'idle';\n"
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("`RecordState` has drifted", out)
 
 
 if __name__ == "__main__":

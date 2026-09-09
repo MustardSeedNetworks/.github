@@ -24,3 +24,18 @@ A repo may ADD linters. Dropping below its tier fails conformance.
 This exists because Trellis silently ran 5 linters with no `gosec` — no Go
 security linting at all on a customer-facing product — and nothing detected it
 until someone looked by hand.
+
+## UI status vocabulary
+
+`status-vocabulary.txt` defines the exact allowed TypeScript declarations.
+Repeated names specify explicit alternatives, not unrestricted extensions.
+
+The state layer (`RollupState`, with `RecordState` as its alias) supports the
+four-state vocabulary `ok / warn / crit / unknown`. Products with an intentional
+inactive state may opt into the same vocabulary plus `idle`, rendered neutrally.
+Idle requires a successful observation confirming that no activity is running;
+it must not imply healthy, hide an error, or stand in for loading or missing data.
+Other products need no changes. Neither form may omit `unknown` or add other states.
+
+The card-layer `Status` definition remains unchanged. Its `loading` lifecycle
+state is distinct from an idle runtime and is never a successful rollup verdict.
