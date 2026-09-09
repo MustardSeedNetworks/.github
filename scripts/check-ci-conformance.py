@@ -220,12 +220,12 @@ def status_vocabulary(root: Path, policy_dir: Path) -> list[str]:
     want_file = policy_dir / "status-vocabulary.txt"
     if not want_file.exists():
         return []
-    want: dict[str, str] = {}
+    want: dict[str, list[str]] = {}
     for line in want_file.read_text().splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         name, _, definition = line.partition("\t")
-        want[name.strip()] = definition.strip()
+        want.setdefault(name.strip(), []).append(definition.strip())
 
     ui = root / "ui/src"
     if not ui.is_dir():
@@ -243,12 +243,12 @@ def status_vocabulary(root: Path, policy_dir: Path) -> list[str]:
             if not m:
                 continue
             name = m.group(1)
-            if line.strip() != want[name]:
+            if line.strip() not in want[name]:
                 rel = path.relative_to(root)
                 findings.append(
                     f"{rel}:{n}: `{name}` has drifted from the fleet vocabulary\n"
                     f"    found:    {line.strip()}\n"
-                    f"    expected: {want[name]}"
+                    f"    expected: {' OR '.join(want[name])}"
                 )
     return findings
 
