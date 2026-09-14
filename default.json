@@ -69,6 +69,16 @@
       "groupName": "frontend toolchain"
     },
     {
+      "description": "Connect RPC packages move as one PR. `@connectrpc/connect-web` declares an EXACT peer on `@connectrpc/connect` (2.2.0 requires exactly 2.2.0), so a PR bumping either half alone cannot regenerate the lockfile and fails `renovate/artifacts` — trellis #428 sat red for four days and #447 was raised into the same wall. Same failure shape as `@vitest/**` above.",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@connectrpc/**"
+      ],
+      "groupName": "connectrpc"
+    },
+    {
       "description": "Pin GitHub Actions to SHAs and group their bumps.",
       "matchManagers": [
         "github-actions"
