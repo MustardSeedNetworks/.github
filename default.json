@@ -69,6 +69,20 @@
       "groupName": "frontend toolchain"
     },
     {
+      "description": "Hold `vitest` and `@vitest/**` at 4.x until Storybook can follow: `@storybook/addon-vitest@10.6.0` declares `peerOptional @vitest/browser-playwright ^4`, so a vitest 5 bump fails `npm error ERESOLVE` in every UI repo and the major frontend-toolchain PR can never go green (seed#2577, trellis#429, stem#1200). Minor and patch updates keep flowing through the frontend-toolchain group above. Lift this rule when `@storybook/addon-vitest` declares a peer range that admits vitest 5.",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "vitest",
+        "@vitest/**"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Connect RPC packages move as one PR. `@connectrpc/connect-web` declares an EXACT peer on `@connectrpc/connect` (2.2.0 requires exactly 2.2.0), so a PR bumping either half alone cannot regenerate the lockfile and fails `renovate/artifacts` — trellis #428 sat red for four days and #447 was raised into the same wall. Same failure shape as `@vitest/**` above.",
       "matchManagers": [
         "npm"
