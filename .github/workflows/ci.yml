@@ -163,14 +163,27 @@ jobs:
     timeout-minutes: 5
     needs: conformance-self-test
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The pin is READ from the uses: line above rather than repeated here.
+      # It used to be a second literal, and two literals that must agree is
+      # how the first one went stale: #75 moved the uses: pin and left this
+      # copy behind, so the assert would have compared against a commit no
+      # longer referenced anywhere. One source, extracted.
       - name: Assert the gate read its scripts from the pinned commit
         env:
-          PINNED: "55d509d09e431c441ec068c031aba538881c5d3c"
           RESOLVED: ${{ needs.conformance-self-test.outputs.policy-sha }}
         run: |
           set -euo pipefail
-          echo "pinned in uses:   $PINNED"
+          PINNED=$(grep -oE 'ci-conformance\.yml@[0-9a-f]{40}' .github/workflows/ci.yml | head -1 | cut -d@ -f2)
+          echo "pinned in uses:    $PINNED"
           echo "policy-sha output: $RESOLVED"
+          if [ -z "$PINNED" ]; then
+            echo "::error::no 40-hex pin found on the ci-conformance.yml uses: line"
+            exit 1
+          fi
           if [ -z "$RESOLVED" ]; then
             echo "::error::the conformance workflow reported no policy-sha"
             exit 1
