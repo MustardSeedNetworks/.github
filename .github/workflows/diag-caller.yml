@@ -1,0 +1,8 @@
+name: Diag Caller
+on:
+  push:
+    branches: [fix/ci-conformance-ref-73]
+permissions: {}
+jobs:
+  call:
+    uses: MustardSeedNetworks/.github/.github/workflows/diag-callee.yml@e7df85df6ad9e15bb76345423d36540c1e6ff41f
