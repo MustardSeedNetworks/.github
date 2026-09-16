@@ -147,6 +147,14 @@ jobs:
       id-token: write
     uses: MustardSeedNetworks/.github/.github/workflows/ci-conformance.yml@fc5f4bc0270a3316284fcb9eb3a9f40b0af52d5a
     with:
+      # The fixture carries no ui/src, so check 9 (shared theme) skips it as a
+      # backend-only repo. It used to symlink the canonical file, which can
+      # only ever pass while the pinned gate's canonical byte-equals this
+      # branch's — i.e. only while the pin is this branch's head, the very
+      # thing that breaks at squash-merge (#77). The symlink and a stable pin
+      # are mutually exclusive; the pin is worth more. check 9 keeps its four
+      # unit tests in scripts/test-check-ci-conformance.py, which cover the
+      # identical, drifted, comment-only-drift and missing cases.
       repo-root: test/fixtures/conformant-repo
 
   conformance-self-test-result:
