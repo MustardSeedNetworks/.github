@@ -34,11 +34,17 @@ Checks
    merge burst silently drops main runs — and release-please, gated on
    workflow_run success, then skips those commits entirely.
 
+9. The shared interface theme matches the canonical copy byte for byte.
+   `ui/src/theme/msn-shared.css` had drifted into three versions across the
+   four UI repos with nothing able to see it, so all four shipped the same
+   1.45:1 light border.
+
 Exit 0 clean, 1 on any finding.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -197,6 +203,47 @@ def linter_floor(root: Path, policy_dir: Path) -> list[str]:
         )
     required = {l.strip() for l in want.read_text().split() if l.strip()}
     return sorted(required - enabled)
+
+
+def shared_theme(root: Path, repo_root: Path) -> list[str]:
+    """The product's copy of the shared theme, if it has drifted.
+
+    The four UI repos each keep a copy of the colour tokens, and on 2026-09-15
+    they were three different files (.github#69): seed and niac-go identical,
+    stem with its own success green, trellis with an extra typography block.
+    Every repo was green throughout — a per-repo check cannot see a fleet-wide
+    divergence, and the divergence is what let all four ship a light-mode
+    border at 1.45:1 against WCAG 1.4.11's 3:1.
+
+    Compared by hash rather than by token, deliberately: a semantic comparison
+    would let the comments explaining WHY a value is what it is drift apart,
+    and those comments are the only record of the measurements behind them.
+
+    A repo with no ui/src is a backend-only repo and is not in scope.
+    """
+    canonical = repo_root / "ui/theme/msn-shared.css"
+    if not canonical.exists():
+        return []
+    if not (root / "ui/src").is_dir():
+        return []
+    copy = root / "ui/src/theme/msn-shared.css"
+    if not copy.exists():
+        return [
+            "ui/src/theme/msn-shared.css is missing — every UI repo carries a "
+            "byte-identical copy of the canonical shared theme"
+        ]
+    want = hashlib.sha256(canonical.read_bytes()).hexdigest()
+    got = hashlib.sha256(copy.read_bytes()).hexdigest()
+    if got == want:
+        return []
+    return [
+        f"ui/src/theme/msn-shared.css has drifted from the canonical theme\n"
+        f"    found:    sha256 {got[:12]}\n"
+        f"    expected: sha256 {want[:12]} (MustardSeedNetworks/.github "
+        f"ui/theme/msn-shared.css)\n"
+        f"    Change the canonical file and re-copy it into all four repos; "
+        f"a product-local edit cannot pass."
+    ]
 
 
 def status_vocabulary(root: Path, policy_dir: Path) -> list[str]:
@@ -439,7 +486,12 @@ def main() -> int:
             fail(f"missing {rel} ({why})")
             findings += 1
 
-    policy = Path(__file__).resolve().parent.parent / "policy"
+    repo_root = Path(__file__).resolve().parent.parent
+    for drift in shared_theme(root, repo_root):
+        fail(drift)
+        findings += 1
+
+    policy = repo_root / "policy"
     if policy.exists():
         try:
             for missing in linter_floor(root, policy):
