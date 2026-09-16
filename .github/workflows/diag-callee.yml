@@ -1,0 +1,25 @@
+name: Diag Callee
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Echo reusable-workflow context values
+        env:
+          JOB_WORKFLOW_SHA: ${{ github.job_workflow_sha }}
+          JOB_WORKFLOW_REF: ${{ github.job_workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "job_workflow_sha=[${JOB_WORKFLOW_SHA}] len=${#JOB_WORKFLOW_SHA}"
+          echo "job_workflow_ref=[${JOB_WORKFLOW_REF}] len=${#JOB_WORKFLOW_REF}"
+          echo "workflow_sha=[${WORKFLOW_SHA}] len=${#WORKFLOW_SHA}"
+          echo "workflow_ref=[${WORKFLOW_REF}] len=${#WORKFLOW_REF}"
+          echo "sha=[${SHA}]"
