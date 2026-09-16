@@ -48,6 +48,15 @@ jobs:
       - name: Run the CI conformance tests
         run: python3 scripts/test-check-ci-conformance.py
 
+      # The canonical palette is defined here, so its contrast is gated here:
+      # the products only ever receive it by hash. .github#74 shipped eleven
+      # tokens under their floor because the measured set was base and raised.
+      - name: Measure the shared theme's contrast
+        run: |
+          set -euo pipefail
+          python3 scripts/test-check-theme-contrast.py
+          python3 scripts/check-theme-contrast.py
+
       # A syntax error in the conformance script fails every product repo's
       # ci-conformance job, so compiling it here turns that into a local failure.
       - name: Compile every policy script
@@ -114,17 +123,38 @@ jobs:
   # its own checkout landing on the wrong commit.
   #
   # The pin below is a literal by necessity (`uses:` takes no expressions) and
-  # is the point of the test, not an oversight: it names a commit of this
-  # branch, and `conformance-self-test-result` asserts the workflow reports
-  # reading its scripts from exactly that commit. If ref resolution regresses
-  # to the default branch, the two SHAs diverge and this fails.
+  # is the point of the test, not an oversight: `conformance-self-test-result`
+  # asserts the workflow reports reading its scripts from exactly that commit,
+  # so a regression back to the default branch makes the two SHAs diverge and
+  # fails here.
+  #
+  # It MUST name a commit reachable from main (.github#77). It used to name a
+  # commit of the PR branch, which read better — a PR tested its own copy —
+  # but a squash-merge deletes that branch, the SHA stops being reachable from
+  # any ref, and `uses:` can no longer resolve it: every later PR then dies at
+  # startup with "workflow was not found", before a job runs and with no
+  # re-run possible. That is what #75 did on 2026-09-16, and main's own run
+  # four seconds after the merge passed only because the branch still existed.
+  # A dangling commit stays fetchable by SHA through the API, so it looks
+  # alive everywhere except the one place that matters.
+  #
+  # A PR that changes ci-conformance.yml itself may pin its own head SHA to
+  # self-test, but must move the pin to the merge commit before it lands.
   conformance-self-test:
     name: Conformance Self-Test
     permissions:
       contents: read
       id-token: write
-    uses: MustardSeedNetworks/.github/.github/workflows/ci-conformance.yml@55d509d09e431c441ec068c031aba538881c5d3c
+    uses: MustardSeedNetworks/.github/.github/workflows/ci-conformance.yml@fc5f4bc0270a3316284fcb9eb3a9f40b0af52d5a
     with:
+      # The fixture carries no ui/src, so check 9 (shared theme) skips it as a
+      # backend-only repo. It used to symlink the canonical file, which can
+      # only ever pass while the pinned gate's canonical byte-equals this
+      # branch's — i.e. only while the pin is this branch's head, the very
+      # thing that breaks at squash-merge (#77). The symlink and a stable pin
+      # are mutually exclusive; the pin is worth more. check 9 keeps its four
+      # unit tests in scripts/test-check-ci-conformance.py, which cover the
+      # identical, drifted, comment-only-drift and missing cases.
       repo-root: test/fixtures/conformant-repo
 
   conformance-self-test-result:
@@ -133,14 +163,27 @@ jobs:
     timeout-minutes: 5
     needs: conformance-self-test
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The pin is READ from the uses: line above rather than repeated here.
+      # It used to be a second literal, and two literals that must agree is
+      # how the first one went stale: #75 moved the uses: pin and left this
+      # copy behind, so the assert would have compared against a commit no
+      # longer referenced anywhere. One source, extracted.
       - name: Assert the gate read its scripts from the pinned commit
         env:
-          PINNED: "55d509d09e431c441ec068c031aba538881c5d3c"
           RESOLVED: ${{ needs.conformance-self-test.outputs.policy-sha }}
         run: |
           set -euo pipefail
-          echo "pinned in uses:   $PINNED"
+          PINNED=$(grep -oE 'ci-conformance\.yml@[0-9a-f]{40}' .github/workflows/ci.yml | head -1 | cut -d@ -f2)
+          echo "pinned in uses:    $PINNED"
           echo "policy-sha output: $RESOLVED"
+          if [ -z "$PINNED" ]; then
+            echo "::error::no 40-hex pin found on the ci-conformance.yml uses: line"
+            exit 1
+          fi
           if [ -z "$RESOLVED" ]; then
             echo "::error::the conformance workflow reported no policy-sha"
             exit 1
