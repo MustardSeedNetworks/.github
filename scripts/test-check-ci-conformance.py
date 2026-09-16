@@ -67,7 +67,8 @@ jobs:
 
 
 class ConformanceChecks(unittest.TestCase):
-    def run_checker(self, ci: str, status_definitions: str = "") -> tuple[int, str]:
+    def run_checker(self, ci: str, status_definitions: str = "",
+                    theme: str | None = None) -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".github/workflows").mkdir(parents=True)
@@ -83,6 +84,9 @@ class ConformanceChecks(unittest.TestCase):
             if status_definitions:
                 (root / "ui/src").mkdir(parents=True)
                 (root / "ui/src/state.ts").write_text(status_definitions)
+            if theme is not None:
+                (root / "ui/src/theme").mkdir(parents=True, exist_ok=True)
+                (root / "ui/src/theme/msn-shared.css").write_text(theme)
             p = subprocess.run([sys.executable, str(CHECKER)], cwd=root,
                                capture_output=True, text=True)
             return p.returncode, p.stdout + p.stderr
@@ -193,6 +197,44 @@ class ConformanceChecks(unittest.TestCase):
         )
         self.assertNotEqual(code, 0)
         self.assertIn("`RecordState` has drifted", out)
+
+
+    # ---- shared theme (.github#69) -------------------------------------
+    #
+    # The fleet shipped three different msn-shared.css files with every repo
+    # green, so these assert on the REAL canonical file rather than a fixture
+    # of one: a canonical edit that is not re-copied must fail here too.
+
+    CANONICAL = CHECKER.parent.parent / "ui/theme/msn-shared.css"
+
+    def test_identical_theme_copy_passes(self) -> None:
+        _, out = self.run_checker(GOOD_CI, theme=self.CANONICAL.read_text())
+        self.assertNotIn("has drifted from the canonical theme", out)
+
+    def test_drifted_theme_copy_is_rejected(self) -> None:
+        drifted = self.CANONICAL.read_text().replace(
+            "--color-status-success: #2a7146;", "--color-status-success: #2f7d4f;")
+        self.assertNotEqual(drifted, self.CANONICAL.read_text(),
+                            "fixture did not mutate the canonical file")
+        code, out = self.run_checker(GOOD_CI, theme=drifted)
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("has drifted from the canonical theme", out)
+
+    def test_comment_only_theme_drift_is_rejected(self) -> None:
+        """Comments carry the measurements; they drift too."""
+        drifted = self.CANONICAL.read_text() + "\n/* product-local note */\n"
+        code, out = self.run_checker(GOOD_CI, theme=drifted)
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("has drifted from the canonical theme", out)
+
+    def test_missing_theme_in_a_ui_repo_is_rejected(self) -> None:
+        code, out = self.run_checker(GOOD_CI, status_definitions="// ui repo\n")
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("ui/src/theme/msn-shared.css is missing", out)
+
+    def test_backend_only_repo_is_out_of_scope(self) -> None:
+        _, out = self.run_checker(GOOD_CI)
+        self.assertNotIn("msn-shared.css", out)
 
 
 if __name__ == "__main__":
