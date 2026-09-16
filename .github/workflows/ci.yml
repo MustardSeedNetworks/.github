@@ -123,16 +123,29 @@ jobs:
   # its own checkout landing on the wrong commit.
   #
   # The pin below is a literal by necessity (`uses:` takes no expressions) and
-  # is the point of the test, not an oversight: it names a commit of this
-  # branch, and `conformance-self-test-result` asserts the workflow reports
-  # reading its scripts from exactly that commit. If ref resolution regresses
-  # to the default branch, the two SHAs diverge and this fails.
+  # is the point of the test, not an oversight: `conformance-self-test-result`
+  # asserts the workflow reports reading its scripts from exactly that commit,
+  # so a regression back to the default branch makes the two SHAs diverge and
+  # fails here.
+  #
+  # It MUST name a commit reachable from main (.github#77). It used to name a
+  # commit of the PR branch, which read better — a PR tested its own copy —
+  # but a squash-merge deletes that branch, the SHA stops being reachable from
+  # any ref, and `uses:` can no longer resolve it: every later PR then dies at
+  # startup with "workflow was not found", before a job runs and with no
+  # re-run possible. That is what #75 did on 2026-09-16, and main's own run
+  # four seconds after the merge passed only because the branch still existed.
+  # A dangling commit stays fetchable by SHA through the API, so it looks
+  # alive everywhere except the one place that matters.
+  #
+  # A PR that changes ci-conformance.yml itself may pin its own head SHA to
+  # self-test, but must move the pin to the merge commit before it lands.
   conformance-self-test:
     name: Conformance Self-Test
     permissions:
       contents: read
       id-token: write
-    uses: MustardSeedNetworks/.github/.github/workflows/ci-conformance.yml@55d509d09e431c441ec068c031aba538881c5d3c
+    uses: MustardSeedNetworks/.github/.github/workflows/ci-conformance.yml@fc5f4bc0270a3316284fcb9eb3a9f40b0af52d5a
     with:
       repo-root: test/fixtures/conformant-repo
 
