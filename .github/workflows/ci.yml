@@ -108,6 +108,49 @@ jobs:
           pipx install zizmor==1.29.0
           zizmor --min-severity high --color always .github/workflows/
 
+  # Nothing ran this repo's own conformance gate: it decides four product
+  # repos and was exercised only by unit tests over the script, never end to
+  # end. That is how .github#73 reached main — the gate could not have caught
+  # its own checkout landing on the wrong commit.
+  #
+  # The pin below is a literal by necessity (`uses:` takes no expressions) and
+  # is the point of the test, not an oversight: it names a commit of this
+  # branch, and `conformance-self-test-result` asserts the workflow reports
+  # reading its scripts from exactly that commit. If ref resolution regresses
+  # to the default branch, the two SHAs diverge and this fails.
+  conformance-self-test:
+    name: Conformance Self-Test
+    permissions:
+      contents: read
+      id-token: write
+    uses: MustardSeedNetworks/.github/.github/workflows/ci-conformance.yml@55d509d09e431c441ec068c031aba538881c5d3c
+    with:
+      repo-root: test/fixtures/conformant-repo
+
+  conformance-self-test-result:
+    name: Conformance Self-Test Result
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: conformance-self-test
+    steps:
+      - name: Assert the gate read its scripts from the pinned commit
+        env:
+          PINNED: "55d509d09e431c441ec068c031aba538881c5d3c"
+          RESOLVED: ${{ needs.conformance-self-test.outputs.policy-sha }}
+        run: |
+          set -euo pipefail
+          echo "pinned in uses:   $PINNED"
+          echo "policy-sha output: $RESOLVED"
+          if [ -z "$RESOLVED" ]; then
+            echo "::error::the conformance workflow reported no policy-sha"
+            exit 1
+          fi
+          if [ "$PINNED" != "$RESOLVED" ]; then
+            echo "::error::conformance ran .github@$RESOLVED but this job pinned $PINNED"
+            exit 1
+          fi
+          echo "The pinned ref was honoured."
+
   ci-complete:
     name: CI Complete
     runs-on: ubuntu-latest
@@ -116,6 +159,8 @@ jobs:
       - python
       - renovate-config
       - workflow-lint
+      - conformance-self-test
+      - conformance-self-test-result
     if: always()
     steps:
       - name: Verify upstream results
