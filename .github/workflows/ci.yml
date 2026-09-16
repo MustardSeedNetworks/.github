@@ -95,17 +95,11 @@ jobs:
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
           # SC2129 is the fleet-standard style exclusion.
           #
-          # The second ignore is a tool gap, not a suppressed finding:
-          # `github.job_workflow_sha` is a documented context property for
-          # reusable workflows, and ci-conformance.yml uses it to pin its own
-          # checkout to the reusable workflow's commit — which is a real
-          # security property, not a stylistic choice. actionlint v1.7.12, the
-          # current release, does not have it in its context schema. Remove
-          # this the moment a release does.
-          actionlint \
-            -ignore 'SC2129' \
-            -ignore 'property "job_workflow_sha" is not defined' \
-            -color
+          # The `job_workflow_sha` ignore that used to sit here is gone with the
+          # expression it excused. actionlint was RIGHT: the property is not in
+          # the `github` context, it evaluated empty, and the ignore was the
+          # only thing standing between that and a visible failure (.github#73).
+          actionlint -ignore 'SC2129' -color
 
       - name: Run zizmor
         env:

@@ -14,12 +14,36 @@ name: CI Conformance
 # Call it with:
 #
 #   ci-conformance:
+#     permissions:
+#       contents: read
+#       id-token: write
 #     uses: MustardSeedNetworks/.github/.github/workflows/ci-conformance.yml@<sha>  # vX.Y.Z
 #
 # and add `ci-conformance` to ci-complete's `needs:` so it can block a merge.
+#
+# `id-token: write` is not optional and is not cloud access: it is the only way
+# this workflow can learn which commit of itself is running (see "Check out the
+# policy repo" below). It mints an identity assertion and reads nothing; a
+# caller that omits it gets a hard failure, never a silent fall-back.
 
 on:
   workflow_call:
+    inputs:
+      repo-root:
+        description: >-
+          Directory within the calling repo to treat as the repo root. Defaults
+          to the checkout root; the policy repo passes a fixture path so it can
+          run this gate against itself.
+        type: string
+        required: false
+        default: "."
+    outputs:
+      policy-sha:
+        description: >-
+          The MustardSeedNetworks/.github commit the conformance scripts were
+          actually read from. A caller can assert this equals the SHA it pinned
+          in `uses:` — that equality is the proof the pin was honoured.
+        value: ${{ jobs.ci-conformance.outputs.policy-sha }}
 
 permissions: {}
 
@@ -30,31 +54,89 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      id-token: write
+    outputs:
+      policy-sha: ${{ steps.policy.outputs.sha }}
     steps:
       - name: Check out the calling repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # Pinned to this workflow's own commit. Callers pin the `uses:` at a SHA,
-      # but without a ref here the scripts that actually decide the verdict came
-      # from whatever was on this repo's default branch at run time — so the
-      # caller's pin bought nothing, and two runs of an identical commit could
-      # disagree. job_workflow_sha (not workflow_sha) is the reusable workflow's
-      # own commit; workflow_sha is the *caller's*, which is a SHA in a
-      # different repository and would not resolve here.
+      # Resolve this workflow's OWN commit, so the scripts that decide the
+      # verdict ride the SHA the caller pinned.
+      #
+      # `${{ github.job_workflow_sha }}` looks like the answer and is what this
+      # step used to pass to `ref:`. It evaluates to the EMPTY STRING (.github#73,
+      # measured — run 35103911603 printed `job_workflow_sha=[] len=0` and
+      # `job_workflow_ref=[] len=0`), and an empty `ref:` is actions/checkout's
+      # default-branch path: every run silently took .github@main, so the
+      # caller's pin bought nothing and a check merged here went live in four
+      # repos the same instant, with no adoption window. `workflow_sha` IS
+      # populated but is the *caller's* commit in a different repository.
+      #
+      # The same run showed the claim is populated in the OIDC token even though
+      # it is absent from the `github` context, so take it from there. No claim,
+      # no run: this fails closed rather than falling back to a branch.
+      - name: Resolve this workflow's own commit
+        id: policy
+        run: |
+          set -euo pipefail
+          sha=$(python3 - <<'PY'
+          import base64, json, os, sys, urllib.request
+
+          url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
+          if not url:
+              sys.exit(
+                  "no OIDC token endpoint: the job calling ci-conformance.yml must "
+                  "grant `permissions: id-token: write`. Without it this gate cannot "
+                  "tell which commit of itself is running."
+              )
+          request = urllib.request.Request(
+              url + "&audience=ci-conformance-policy-ref",
+              headers={"Authorization": "bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              token = json.load(response)["value"]
+
+          claims = token.split(".")[1]
+          claims += "=" * (-len(claims) % 4)
+          sha = json.loads(base64.urlsafe_b64decode(claims)).get("job_workflow_sha") or ""
+          if len(sha) != 40 or sha.strip("0123456789abcdef"):
+              sys.exit(f"OIDC claim job_workflow_sha is not a commit SHA: {sha!r}")
+          print(sha)
+          PY
+          )
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Conformance scripts will be read from .github@$sha"
+
       - name: Check out the policy repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: MustardSeedNetworks/.github
-          ref: ${{ github.job_workflow_sha }}
+          ref: ${{ steps.policy.outputs.sha }}
           path: .conformance
           persist-credentials: false
+
+      # The defect this gate shipped with was a checkout that landed somewhere
+      # other than the pin and said nothing. Assert the landing, so a future
+      # regression in ref resolution is loud instead of silent.
+      - name: Assert the policy checkout is on this workflow's own commit
+        env:
+          WANT: ${{ steps.policy.outputs.sha }}
+        run: |
+          set -euo pipefail
+          got=$(git -C .conformance rev-parse HEAD)
+          if [ "$got" != "$WANT" ]; then
+            echo "::error::policy checkout landed on $got, expected $WANT"
+            exit 1
+          fi
+          echo "policy checkout verified at $got"
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version-file: ${{ inputs.repo-root }}/go.mod
 
       # Read the version out of the caller's own ci.yml rather than carrying a
       # copy here. A hardcoded version drifts: this workflow sat on v2.12.2
@@ -64,8 +146,10 @@ jobs:
       # whose pin cannot be found is a repo whose floor cannot be verified.
       - name: Derive golangci-lint version from the calling repo
         id: golangci
+        env:
+          REPO_ROOT: ${{ inputs.repo-root }}
         run: |
-          version=$(grep -A6 'golangci/golangci-lint-action@' .github/workflows/ci.yml \
+          version=$(grep -A6 'golangci/golangci-lint-action@' "$REPO_ROOT/.github/workflows/ci.yml" \
             | grep -m1 -oE 'version:[[:space:]]*v[0-9]+\.[0-9]+\.[0-9]+' \
             | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
           if [ -z "$version" ]; then
@@ -83,5 +167,8 @@ jobs:
           GOLANGCI_VERSION: ${{ steps.golangci.outputs.version }}
         run: go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}"
 
+      # The script derives every product path from its working directory, so
+      # the fixture run needs nothing but a different cwd.
       - name: Check CI conformance
-        run: python3 .conformance/scripts/check-ci-conformance.py
+        working-directory: ${{ inputs.repo-root }}
+        run: python3 "$GITHUB_WORKSPACE/.conformance/scripts/check-ci-conformance.py"
