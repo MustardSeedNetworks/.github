@@ -48,6 +48,15 @@ jobs:
       - name: Run the CI conformance tests
         run: python3 scripts/test-check-ci-conformance.py
 
+      # The canonical palette is defined here, so its contrast is gated here:
+      # the products only ever receive it by hash. .github#74 shipped eleven
+      # tokens under their floor because the measured set was base and raised.
+      - name: Measure the shared theme's contrast
+        run: |
+          set -euo pipefail
+          python3 scripts/test-check-theme-contrast.py
+          python3 scripts/check-theme-contrast.py
+
       # A syntax error in the conformance script fails every product repo's
       # ci-conformance job, so compiling it here turns that into a local failure.
       - name: Compile every policy script
