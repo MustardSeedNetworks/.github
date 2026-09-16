@@ -4,6 +4,7 @@ on:
     branches: [fix/ci-conformance-ref-73]
 permissions:
   contents: read
+  id-token: write
 jobs:
   call:
-    uses: MustardSeedNetworks/.github/.github/workflows/diag-callee.yml@e7df85df6ad9e15bb76345423d36540c1e6ff41f
+    uses: MustardSeedNetworks/.github/.github/workflows/diag-callee.yml@34fde546a3fbfd5587e63e0f3b62506344517106
