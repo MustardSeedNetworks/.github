@@ -1,0 +1,19 @@
+# The fixture declares the `minimum` tier in .github/golangci-tier.txt, so the
+# conformance gate requires exactly these linters to be enabled here.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - errcheck
+    - errorlint
+    - gosec
+    - govet
+    - ineffassign
+    - nilerr
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - unused

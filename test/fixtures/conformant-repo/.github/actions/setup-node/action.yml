@@ -1,0 +1,7 @@
+name: Set up Node
+description: Fixture stand-in for the fleet's setup-node composite.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "fixture setup-node"
