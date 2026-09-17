@@ -476,6 +476,56 @@ def main_concurrency(root: Path) -> list[str]:
     return []
 
 
+def locales_home(root: Path) -> list[str]:
+    """The `@locales` alias must resolve to internal/i18n/locales.
+
+    Every product bundles its translations the same way -- a `@locales` Vite
+    alias over static JSON imports -- but stem pointed that alias at
+    `ui/locales` while seed, niac-go and trellis pointed it at
+    `internal/i18n/locales`. One path, four repos, no reason for the odd one
+    out, and real cost: the shared i18n gate defaults LOCALES_DIR to
+    internal/i18n/locales, so the outlier needed an override in its shim AND
+    a `locales-dir:` input in ci.yml, and anyone grepping the documented path
+    found nothing (stem#1348).
+
+    Backend-adjacent is canonical because the locales are a product asset, not
+    a frontend one: seed's API localizes its own error text and embeds this
+    exact directory from Go. A product only adds that loader when its backend
+    emits user-facing text -- but the files live here from the start, so the
+    day it does there is nothing to move.
+
+    Checking the directory exists is not enough; the alias is what the bundle
+    actually reads, so this pins the alias target itself.
+    """
+    canonical = "internal/i18n/locales"
+    findings = []
+    for rel in ("ui/vite.config.ts", "ui/vitest.config.ts", "ui/.storybook/main.ts"):
+        path = root / rel
+        if not path.exists():
+            continue
+        for line in path.read_text(errors="ignore").splitlines():
+            if "'@locales'" not in line and '"@locales"' not in line:
+                continue
+            if line.lstrip().startswith(("//", "*")):
+                continue
+            if canonical not in line:
+                findings.append(
+                    f"{rel}: the @locales alias does not resolve to "
+                    f"{canonical}/ -- translations live beside the Go package "
+                    f"that embeds them, and the shared i18n gate defaults "
+                    f"LOCALES_DIR there")
+    tsconfig = root / "ui/tsconfig.app.json"
+    if tsconfig.exists():
+        for line in tsconfig.read_text(errors="ignore").splitlines():
+            if '"@locales/*"' in line and canonical not in line:
+                findings.append(
+                    f"ui/tsconfig.app.json: the @locales/* path mapping does "
+                    f"not resolve to {canonical}/")
+    if findings and not (root / canonical).is_dir():
+        findings.append(f"{canonical}/ does not exist")
+    return findings
+
+
 def main() -> int:
     root = Path.cwd()
     repo = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -511,7 +561,7 @@ def main() -> int:
         findings += 1
 
     for check in (composite_setup, govulncheck_advisory, ldflags_parity,
-                  main_concurrency):
+                  main_concurrency, locales_home):
         for msg in check(root):
             fail(msg)
             findings += 1
