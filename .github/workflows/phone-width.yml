@@ -22,6 +22,14 @@ name: Phone Width
 #       dist-dir: internal/api/ui
 #       routes: '["/", "/settings"]'
 #
+# A product whose routes are behind a session starts its own daemon instead:
+#
+#     with:
+#       base-url: https://127.0.0.1:8443
+#       start-command: make run-e2e-daemon
+#       storage-state: ui/.auth/state.json
+#       routes: '["/", "/settings"]'
+#
 # and add `phone-width` to ci-complete's `needs:` so it can block a merge.
 #
 # `id-token: write` is how the gate learns which commit of itself is running;
@@ -40,9 +48,40 @@ on:
       dist-dir:
         description: >-
           Directory holding the built single-page app to serve. Unknown paths
-          fall back to its index.html, so client-side routes resolve.
+          fall back to its index.html, so client-side routes resolve. Use this
+          for a UI that renders without a backend; pass base-url instead when
+          the product is behind authentication.
         type: string
-        required: true
+        required: false
+        default: ""
+      base-url:
+        description: >-
+          Check against a running app rather than a static serve. Three of the
+          four products gate every route behind a session, so a static build
+          answers each one with the login screen; those repos start their own
+          daemon here, the way their Playwright suite already does.
+        type: string
+        required: false
+        default: ""
+      start-command:
+        description: >-
+          Command that starts that app in the background. The gate then waits
+          for base-url to answer before it visits a route.
+        type: string
+        required: false
+        default: ""
+      start-timeout-seconds:
+        description: How long to wait for base-url to answer.
+        type: number
+        required: false
+        default: 120
+      storage-state:
+        description: >-
+          Playwright storageState JSON holding a signed-in session, for a
+          product whose routes are behind authentication.
+        type: string
+        required: false
+        default: ""
       ui-dir:
         description: Directory the install and build commands run in.
         type: string
@@ -194,9 +233,30 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      - name: Start the app
+        if: inputs.start-command != ''
+        env:
+          START_COMMAND: ${{ inputs.start-command }}
+          BASE_URL: ${{ inputs.base-url }}
+          TIMEOUT: ${{ inputs.start-timeout-seconds }}
+        run: |
+          set -euo pipefail
+          sh -euc "$START_COMMAND" &
+          deadline=$((SECONDS + TIMEOUT))
+          until curl -ksSf -o /dev/null "$BASE_URL"; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::$BASE_URL did not answer within ${TIMEOUT}s"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "$BASE_URL is answering"
+
       - name: Check every route at 390x844
         env:
           DIST_DIR: ${{ inputs.dist-dir }}
+          BASE_URL: ${{ inputs.base-url }}
+          STORAGE_STATE: ${{ inputs.storage-state }}
           ROUTES: ${{ inputs.routes }}
           PAGE_HEADER_TESTID: ${{ inputs.page-header-testid }}
           RAIL_TESTID: ${{ inputs.rail-testid }}
@@ -206,9 +266,19 @@ jobs:
           NODE_PATH: .phone-width/scripts/phone-width/node_modules
         run: |
           set -euo pipefail
+          if { [ -n "$DIST_DIR" ] && [ -n "$BASE_URL" ]; } || { [ -z "$DIST_DIR" ] && [ -z "$BASE_URL" ]; }; then
+            echo "::error::pass exactly one of dist-dir (static build) or base-url (running app)"
+            exit 1
+          fi
+          if [ -n "$BASE_URL" ]; then
+            target=(--base-url "$BASE_URL")
+          else
+            target=(--serve "$DIST_DIR")
+          fi
           node .phone-width/scripts/phone-width/check-phone-width.mjs \
             --routes "$ROUTES" \
-            --serve "$DIST_DIR" \
+            "${target[@]}" \
+            --storage-state "$STORAGE_STATE" \
             --page-header-testid "$PAGE_HEADER_TESTID" \
             --rail-testid "$RAIL_TESTID" \
             --rail-max-width "$RAIL_MAX_WIDTH" \

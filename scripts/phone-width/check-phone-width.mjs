@@ -51,6 +51,7 @@ usage: check-phone-width.mjs --routes '["/","/settings"]' (--serve <dir> | --bas
                              [--page-header-testid <id>] [--rail-testid <id>]
                              [--rail-max-width <px>] [--primary-action-testid <id>]
                              [--storage-state <file>] [--settle-ms <n>]
+                             [--header-timeout-ms <n>]
 
   --routes                 JSON array of route paths to visit. Required.
   --serve                  Serve this directory as a single-page app (unknown
@@ -64,6 +65,7 @@ usage: check-phone-width.mjs --routes '["/","/settings"]' (--serve <dir> | --bas
                            viewport or one scroll of it.
   --storage-state          Playwright storageState JSON, for an app behind auth.
   --settle-ms              Extra settle time after load. Default 250.
+  --header-timeout-ms      How long to wait for the page header. Default 10000.
 `)
   process.exit(2)
 }
@@ -79,6 +81,7 @@ function parseArgs(argv) {
     primaryActionTestid: null,
     storageState: null,
     settleMs: 250,
+    headerTimeoutMs: 10000,
   }
   const keys = {
     '--routes': 'routes',
@@ -90,6 +93,7 @@ function parseArgs(argv) {
     '--primary-action-testid': 'primaryActionTestid',
     '--storage-state': 'storageState',
     '--settle-ms': 'settleMs',
+    '--header-timeout-ms': 'headerTimeoutMs',
   }
   for (let i = 0; i < argv.length; i += 2) {
     const key = keys[argv[i]]
@@ -109,6 +113,7 @@ function parseArgs(argv) {
   if (!args.serve === !args.baseUrl) usage('pass exactly one of --serve or --base-url')
   args.railMaxWidth = Number(args.railMaxWidth)
   args.settleMs = Number(args.settleMs)
+  args.headerTimeoutMs = Number(args.headerTimeoutMs)
   // An empty string is how a workflow passes "not configured" for an optional
   // selector; treating it as a selector would match nothing and fail every route.
   for (const key of ['railTestid', 'primaryActionTestid', 'storageState']) {
@@ -186,7 +191,16 @@ const findOverflow = ({ width, tolerance }) => {
 
 async function checkRoute(page, baseUrl, route, args) {
   const failures = []
-  await page.goto(`${baseUrl}${route}`, { waitUntil: 'networkidle' })
+  // Not `networkidle`: a product daemon holding an SSE stream never goes idle,
+  // so every route would time out instead of being judged. Wait for the page
+  // header the route is asserted to have, and let its absence be reported as
+  // the header failure below rather than as a crash.
+  await page.goto(`${baseUrl}${route}`, { waitUntil: 'load' })
+  await page
+    .getByTestId(args.pageHeaderTestid)
+    .first()
+    .waitFor({ state: 'visible', timeout: args.headerTimeoutMs })
+    .catch(() => {})
   await page.waitForTimeout(args.settleMs)
 
   const overflow = await page.evaluate(findOverflow, {

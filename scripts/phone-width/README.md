@@ -71,8 +71,14 @@ NODE_PATH=scripts/phone-width/node_modules \
 ```
 
 Pass `--base-url` instead of `--serve` to check an app that is already
-running, and `--storage-state` to hand it a Playwright session for an app
-behind authentication.
+running, and `--storage-state` to hand it a Playwright session.
+
+Which of the two a repo uses is not a preference. seed, stem and niac-go gate
+every route behind a session, so a statically served build answers each one
+with the login screen and the gate would report a missing page header on all of
+them; those repos pass `base-url` and `start-command` and let the workflow boot
+the daemon their Playwright suite already uses. A UI that renders without a
+backend can take the static serve.
 
 ## Adopting it in a product repo
 
@@ -86,6 +92,16 @@ behind authentication.
       dist-dir: internal/api/ui
       routes: '["/", "/settings"]'
       rail-testid: app-rail
+```
+
+Behind authentication:
+
+```yaml
+    with:
+      base-url: https://127.0.0.1:8443
+      start-command: make run-e2e-daemon
+      storage-state: ui/.auth/state.json
+      routes: '["/", "/settings"]'
 ```
 
 Add `phone-width` to `ci-complete`'s `needs:` so it can block a merge. Derive
