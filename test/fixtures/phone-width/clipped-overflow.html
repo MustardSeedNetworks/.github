@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phone-width fixture — clipped overflow</title>
+    <link rel="stylesheet" href="/_shell.css" />
+  </head>
+  <body>
+    <!--
+      The defect the gate exists for, in the shape trellis shipped it: the
+      640px card overflows a page body inside an `overflow: hidden` shell, so
+      the DOCUMENT never scrolls and a scrollWidth-only check passes while half
+      the card sits off-screen. Only the per-element walk catches this one.
+    -->
+    <div class="app">
+      <nav class="rail" data-testid="app-rail" aria-label="Sections"></nav>
+      <main class="main">
+        <h1 data-testid="page-header-title">Clipped</h1>
+        <div class="card" style="width: 640px">Half of this card is off-screen and unreachable.</div>
+      </main>
+    </div>
+  </body>
+</html>

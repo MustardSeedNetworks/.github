@@ -1,0 +1,3 @@
+# The phone-width gate installs its browser driver here; it is pinned by
+# scripts/phone-width/package-lock.json, not vendored.
+scripts/phone-width/node_modules/
