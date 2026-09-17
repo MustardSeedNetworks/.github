@@ -52,3 +52,9 @@ jobs:
           # force us to relicense, so they are refused rather than reviewed
           # after the fact.
           deny-licenses: GPL-3.0, AGPL-3.0, LGPL-3.0, GPL-2.0
+          # jszip declares `(MIT OR GPL-3.0-or-later)`: the OR lets us take it
+          # under MIT, but dependency-review matches the GPL disjunct against
+          # deny-licenses regardless and blocks every jszip bump (seed#2678).
+          # Exempt the one package — NOT allow-licenses, which cannot pair with
+          # deny-licenses and would drop the copyleft wall for everything else.
+          allow-dependencies-licenses: pkg:npm/jszip
