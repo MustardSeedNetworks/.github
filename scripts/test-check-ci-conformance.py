@@ -68,7 +68,9 @@ jobs:
 
 class ConformanceChecks(unittest.TestCase):
     def run_checker(self, ci: str, status_definitions: str = "",
-                    theme: str | None = None) -> tuple[int, str]:
+                    theme: str | None = None,
+                    locales_alias: str | None = None,
+                    locales_dir: str = "internal/i18n/locales") -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".github/workflows").mkdir(parents=True)
@@ -87,6 +89,15 @@ class ConformanceChecks(unittest.TestCase):
             if theme is not None:
                 (root / "ui/src/theme").mkdir(parents=True, exist_ok=True)
                 (root / "ui/src/theme/msn-shared.css").write_text(theme)
+            if locales_alias is not None:
+                (root / "ui").mkdir(parents=True, exist_ok=True)
+                (root / "ui/vite.config.ts").write_text(
+                    "export default {\n"
+                    "  resolve: { alias: [\n"
+                    f"    {{ find: '@locales', replacement: '{locales_alias}' }},\n"
+                    "  ] },\n"
+                    "};\n")
+                (root / locales_dir / "en").mkdir(parents=True, exist_ok=True)
             p = subprocess.run([sys.executable, str(CHECKER)], cwd=root,
                                capture_output=True, text=True)
             return p.returncode, p.stdout + p.stderr
@@ -236,6 +247,56 @@ class ConformanceChecks(unittest.TestCase):
         _, out = self.run_checker(GOOD_CI)
         self.assertNotIn("msn-shared.css", out)
 
+
+
+    def test_canonical_locales_alias_is_accepted(self) -> None:
+        _, out = self.run_checker(
+            GOOD_CI, locales_alias="../internal/i18n/locales")
+        self.assertNotIn("@locales alias", out)
+
+    def test_frontend_locales_alias_is_rejected(self) -> None:
+        code, out = self.run_checker(GOOD_CI, locales_alias="./locales")
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("@locales alias does not resolve to "
+                      "internal/i18n/locales/", out)
+
+    def test_repo_without_a_locales_alias_is_not_forced_to_have_one(self) -> None:
+        """A repo with no i18n must not be failed into adopting it.
+
+        The rule pins where translations live, not whether a product has any.
+        """
+        _, out = self.run_checker(GOOD_CI)
+        self.assertNotIn("@locales alias", out)
+
+    def test_a_commented_out_alias_is_not_a_violation(self) -> None:
+        """A doc comment showing the old path must not fail the repo.
+
+        The relocation leaves comments behind that quote `'@locales': './locales'`
+        as the thing that changed; reading those as live config would fail a
+        repo for describing its own history correctly.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".github/workflows").mkdir(parents=True)
+            (root / ".github/workflows/ci.yml").write_text(GOOD_CI)
+            (root / ".github/CODEOWNERS").write_text("* @owner\n")
+            (root / ".github/ci-advisory-jobs.txt").write_text("# none\n")
+            (root / "scripts").mkdir()
+            (root / "scripts/check-banned-vocabulary.py").write_text("")
+            (root / "scripts/check-file-size.sh").write_text("")
+            (root / "ui").mkdir(parents=True)
+            (root / "internal/i18n/locales/en").mkdir(parents=True)
+            (root / "ui/vite.config.ts").write_text(
+                "export default {\n"
+                "  resolve: { alias: [\n"
+                "    // was: { find: '@locales', replacement: './locales' }\n"
+                "    { find: '@locales', "
+                "replacement: '../internal/i18n/locales' },\n"
+                "  ] },\n"
+                "};\n")
+            proc = subprocess.run([sys.executable, str(CHECKER)], cwd=root,
+                                  capture_output=True, text=True)
+            self.assertNotIn("@locales alias", proc.stdout + proc.stderr)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
