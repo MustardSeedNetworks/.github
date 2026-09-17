@@ -57,6 +57,15 @@ jobs:
           python3 scripts/test-check-theme-contrast.py
           python3 scripts/check-theme-contrast.py
 
+      # The pin policy this repo hands the fleet was never pointed back here:
+      # `license-check.yml` installed go-licenses@latest into four repos' CI
+      # (.github#67). This applies it to our own workflows and images.
+      - name: Run the self-pin gate tests
+        run: python3 scripts/test-check-self-pins.py
+
+      - name: Check this repo's own pins
+        run: python3 scripts/check-self-pins.py
+
       # A syntax error in the conformance script fails every product repo's
       # ci-conformance job, so compiling it here turns that into a local failure.
       - name: Compile every policy script

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "The policy repo runs under its own policy. This lives at .github/renovate.json, not the repo root: `github>MustardSeedNetworks/.github` resolves the PRESET from default.json, and a root renovate.json next to it invites the two to be confused. Without this file Renovate never looked at this repository at all, so the reusable workflows' action digests, the Linux lint image and its golangci-lint pin drifted with nothing able to see them (.github#67).",
+  "extends": [
+    "github>MustardSeedNetworks/.github"
+  ]
+}
