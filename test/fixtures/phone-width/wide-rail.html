@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phone-width fixture — rail not collapsed</title>
+    <link rel="stylesheet" href="/_shell.css" />
+  </head>
+  <body>
+    <!-- Nothing overflows: the desktop rail just eats 240 of the 390 pixels. -->
+    <div class="app">
+      <nav class="rail wide" data-testid="app-rail" aria-label="Sections"></nav>
+      <main class="main">
+        <h1 data-testid="page-header-title">Cramped</h1>
+        <div class="card">Fits, barely.</div>
+      </main>
+    </div>
+  </body>
+</html>

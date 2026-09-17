@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phone-width fixture — deliberate horizontal scroller</title>
+    <link rel="stylesheet" href="/_shell.css" />
+  </head>
+  <body>
+    <!--
+      A wide data table inside an `overflow-x: auto` region is a design choice,
+      not a defect. This page must PASS: a gate that fails it would be rewritten
+      out of the products within a week.
+    -->
+    <div class="app">
+      <nav class="rail" data-testid="app-rail" aria-label="Sections"></nav>
+      <main class="main">
+        <h1 data-testid="page-header-title">Results</h1>
+        <div class="scroller">
+          <table>
+            <tr><th>Interface</th><th>Address</th><th>Throughput</th><th>Latency</th><th>Loss</th><th>Jitter</th></tr>
+            <tr><td>eth0</td><td>10.44.40.30</td><td>942 Mbit/s</td><td>0.41 ms</td><td>0.00 %</td><td>0.06 ms</td></tr>
+          </table>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

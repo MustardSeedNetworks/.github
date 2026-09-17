@@ -1,0 +1,216 @@
+name: Phone Width
+
+# Owner decision 2026-09-15: everything works at 390x844 in all four products.
+# This runs the fleet's one definition of "works" (scripts/phone-width/) against
+# a repo's own built UI, so the four products cannot each drift their own idea
+# of phone support.
+#
+# It is a SEPARATE reusable workflow rather than another rule inside
+# ci-conformance.yml on purpose. A rule added there goes live in every repo the
+# instant it merges — .github#73 showed the callers' SHA pins were inert, and
+# UI-FLEET-1's theme check ejected PRs in three repos the same afternoon. A repo
+# adopts this gate by adding the `uses:` below, on the day its shell row lands.
+#
+# Call it with:
+#
+#   phone-width:
+#     permissions:
+#       contents: read
+#       id-token: write
+#     uses: MustardSeedNetworks/.github/.github/workflows/phone-width.yml@<sha>  # vX.Y.Z
+#     with:
+#       dist-dir: internal/api/ui
+#       routes: '["/", "/settings"]'
+#
+# and add `phone-width` to ci-complete's `needs:` so it can block a merge.
+#
+# `id-token: write` is how the gate learns which commit of itself is running;
+# see ci-conformance.yml for the measurement behind that. No claim, no run.
+
+on:
+  workflow_call:
+    inputs:
+      routes:
+        description: >-
+          JSON array of route paths to visit, e.g. '["/", "/settings"]'. The
+          caller derives these from its own pageRegistry rather than this
+          workflow guessing at a module path that differs per product.
+        type: string
+        required: true
+      dist-dir:
+        description: >-
+          Directory holding the built single-page app to serve. Unknown paths
+          fall back to its index.html, so client-side routes resolve.
+        type: string
+        required: true
+      ui-dir:
+        description: Directory the install and build commands run in.
+        type: string
+        required: false
+        default: "ui"
+      install-command:
+        description: Command that installs the UI's dependencies.
+        type: string
+        required: false
+        default: "npm ci"
+      build-command:
+        description: Command that builds the UI into dist-dir.
+        type: string
+        required: false
+        default: "npm run build"
+      page-header-testid:
+        description: >-
+          The page header that must be visible on every route. All four products
+          already render data-testid="page-header-title".
+        type: string
+        required: false
+        default: "page-header-title"
+      rail-testid:
+        description: >-
+          The navigation rail. When given, it must be hidden or at most
+          rail-max-width wide at 390 — collapsed, or behind a drawer. The four
+          shells do not yet agree on this test id, so it is per-caller.
+        type: string
+        required: false
+        default: ""
+      rail-max-width:
+        description: Widest a visible rail may be at 390px.
+        type: number
+        required: false
+        default: 72
+      primary-action-testid:
+        description: >-
+          When given and present on a route, the page's primary action must be
+          within the viewport or one scroll of it.
+        type: string
+        required: false
+        default: ""
+      settle-ms:
+        description: Settle time after each route reaches network idle.
+        type: number
+        required: false
+        default: 250
+
+permissions: {}
+
+jobs:
+  phone-width:
+    name: Phone Width
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the calling repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Same mechanism, and same reason, as ci-conformance.yml: `github.job_workflow_sha`
+      # is EMPTY in the context and present in the OIDC token (.github#73, measured).
+      # An empty `ref:` is actions/checkout's default-branch path, which would put
+      # the gate's rules on main rather than on the commit the caller pinned.
+      - name: Resolve this workflow's own commit
+        id: policy
+        run: |
+          set -euo pipefail
+          sha=$(python3 - <<'PY'
+          import base64, json, os, sys, urllib.request
+
+          url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
+          if not url:
+              sys.exit(
+                  "no OIDC token endpoint: the job calling phone-width.yml must grant "
+                  "`permissions: id-token: write`. Without it this gate cannot tell "
+                  "which commit of itself is running."
+              )
+          request = urllib.request.Request(
+              url + "&audience=phone-width-policy-ref",
+              headers={"Authorization": "bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              token = json.load(response)["value"]
+
+          claims = token.split(".")[1]
+          claims += "=" * (-len(claims) % 4)
+          sha = json.loads(base64.urlsafe_b64decode(claims)).get("job_workflow_sha") or ""
+          if len(sha) != 40 or sha.strip("0123456789abcdef"):
+              sys.exit(f"OIDC claim job_workflow_sha is not a commit SHA: {sha!r}")
+          print(sha)
+          PY
+          )
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Phone-width rules will be read from .github@$sha"
+
+      - name: Check out the policy repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/.github
+          ref: ${{ steps.policy.outputs.sha }}
+          path: .phone-width
+          persist-credentials: false
+
+      - name: Assert the policy checkout is on this workflow's own commit
+        env:
+          WANT: ${{ steps.policy.outputs.sha }}
+        run: |
+          set -euo pipefail
+          got=$(git -C .phone-width rev-parse HEAD)
+          if [ "$got" != "$WANT" ]; then
+            echo "::error::policy checkout landed on $got, expected $WANT"
+            exit 1
+          fi
+          echo "policy checkout verified at $got"
+
+      # This repo has no setup-node composite (it holds apt-install, flake-budget
+      # and i18n-validate only), so the fleet Node version is pinned here, as the
+      # Renovate job already does.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.8.1"
+
+      # The two commands go through the environment rather than into the script
+      # text: a `${{ }}` expansion inside a `run:` block is expanded before the
+      # shell sees it, which is template injection (zizmor, high) even when the
+      # only caller is a trusted repo's own ci.yml.
+      - name: Build the UI
+        working-directory: ${{ inputs.ui-dir }}
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+          BUILD_COMMAND: ${{ inputs.build-command }}
+        run: |
+          set -euo pipefail
+          sh -euc "$INSTALL_COMMAND"
+          sh -euc "$BUILD_COMMAND"
+
+      # The browser driver is self-contained, so a repo does not need Playwright
+      # of its own — and the gate cannot drift onto whatever version a caller
+      # happens to have installed.
+      - name: Install the phone-width driver
+        working-directory: .phone-width/scripts/phone-width
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Check every route at 390x844
+        env:
+          DIST_DIR: ${{ inputs.dist-dir }}
+          ROUTES: ${{ inputs.routes }}
+          PAGE_HEADER_TESTID: ${{ inputs.page-header-testid }}
+          RAIL_TESTID: ${{ inputs.rail-testid }}
+          RAIL_MAX_WIDTH: ${{ inputs.rail-max-width }}
+          PRIMARY_ACTION_TESTID: ${{ inputs.primary-action-testid }}
+          SETTLE_MS: ${{ inputs.settle-ms }}
+          NODE_PATH: .phone-width/scripts/phone-width/node_modules
+        run: |
+          set -euo pipefail
+          node .phone-width/scripts/phone-width/check-phone-width.mjs \
+            --routes "$ROUTES" \
+            --serve "$DIST_DIR" \
+            --page-header-testid "$PAGE_HEADER_TESTID" \
+            --rail-testid "$RAIL_TESTID" \
+            --rail-max-width "$RAIL_MAX_WIDTH" \
+            --primary-action-testid "$PRIMARY_ACTION_TESTID" \
+            --settle-ms "$SETTLE_MS"

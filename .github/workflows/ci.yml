@@ -140,6 +140,36 @@ jobs:
   #
   # A PR that changes ci-conformance.yml itself may pin its own head SHA to
   # self-test, but must move the pin to the merge commit before it lands.
+  # The phone-width gate decides whether a route "works at 390x844" for all four
+  # products, so a rule that silently stops firing weakens every one of them.
+  # The fixtures pin each verdict, including the two that matter most: a card
+  # clipped by an `overflow: hidden` shell FAILS even though the document never
+  # scrolls, and a deliberate `overflow-x: auto` table PASSES.
+  phone-width:
+    name: Phone Width Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.8.1"
+
+      - name: Install the phone-width driver
+        working-directory: scripts/phone-width
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the phone-width fixture tests
+        env:
+          NODE_PATH: scripts/phone-width/node_modules
+        run: node scripts/test-check-phone-width.mjs
+
   conformance-self-test:
     name: Conformance Self-Test
     permissions:
@@ -202,6 +232,7 @@ jobs:
       - python
       - renovate-config
       - workflow-lint
+      - phone-width
       - conformance-self-test
       - conformance-self-test-result
     if: always()
