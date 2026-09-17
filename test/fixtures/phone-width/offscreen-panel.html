@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phone-width fixture — panel pushed off-screen</title>
+    <link rel="stylesheet" href="/_shell.css" />
+  </head>
+  <body>
+    <!--
+      The panel and the page body both compute `overflow-x: auto`, because
+      setting overflow-y forces it. Neither is declared exempt, so neither
+      excuses the card sitting off the right edge — which is the whole reason
+      the exemption is an attribute an author writes, not a style the gate
+      reads back.
+    -->
+    <div class="app">
+      <nav class="rail" data-testid="app-rail" aria-label="Sections"></nav>
+      <main class="main">
+        <h1 data-testid="page-header-title">Pushed aside</h1>
+        <div class="panel">
+          <div class="card">This card fits its panel, and the panel is off-screen.</div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

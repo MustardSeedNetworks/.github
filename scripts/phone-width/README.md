@@ -41,17 +41,25 @@ and the gate reports only the element message on that page:
 
 ### What is not a defect
 
-A wide data table inside a horizontally scrolling region is a design choice.
-An element is exempt when an **ancestor** both computes
-`overflow-x: auto|scroll` **and** actually has somewhere to scroll
-(`scrollWidth > clientWidth`). Both halves are load-bearing: CSS forces
-`overflow-x` to `auto` whenever `overflow-y` is set and `overflow-x` is
-`visible`, so every `overflow-y-auto` page body in the fleet computes as a
-horizontal scroller, and the scroll extent is what tells a real scroller from
-a clip.
+A wide data table inside a horizontally scrolling region is a design choice —
+but it has to say so. Put `data-phone-width-exempt` on the scroll container,
+and everything inside it is skipped:
 
-Anything under `[data-phone-width-exempt]` is also skipped. Reach for it
-rarely, and say in the markup why.
+```html
+<div class="overflow-x-auto" data-phone-width-exempt>
+  <table>…</table>
+</div>
+```
+
+The gate does **not** infer this from computed style, and the first draft that
+did was unusable. CSS forces `overflow-x` to `auto` whenever `overflow-y` is
+set and `overflow-x` is `visible`, so every `overflow-y-auto` page body in the
+fleet computes as a horizontal scroller — the inference exempted the whole page
+body on the very shells this gate exists to check, and the fixtures passed
+while nothing was being checked. An attribute an author writes is the only
+signal that means what it says.
+
+Reach for it rarely, and say in the markup why.
 
 ## Running it by hand
 

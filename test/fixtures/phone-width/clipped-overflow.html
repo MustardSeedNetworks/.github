@@ -8,14 +8,14 @@
   </head>
   <body>
     <!--
-      The defect the gate exists for, in its hardest form: the 640px card is
-      clipped by the `overflow: hidden` shell, so the DOCUMENT never scrolls
-      and a scrollWidth-only check passes while half the card is unreachable.
-      Only the per-element walk catches this one.
+      The defect the gate exists for, in the shape trellis shipped it: the
+      640px card overflows a page body inside an `overflow: hidden` shell, so
+      the DOCUMENT never scrolls and a scrollWidth-only check passes while half
+      the card sits off-screen. Only the per-element walk catches this one.
     -->
     <div class="app">
       <nav class="rail" data-testid="app-rail" aria-label="Sections"></nav>
-      <main class="main clip">
+      <main class="main">
         <h1 data-testid="page-header-title">Clipped</h1>
         <div class="card" style="width: 640px">Half of this card is off-screen and unreachable.</div>
       </main>

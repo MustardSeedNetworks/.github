@@ -45,6 +45,15 @@ const CASES = [
     because: 'navigation rail is 240px wide',
   },
   {
+    // Both boxes compute `overflow-x: auto` — the panel because its overflow-y
+    // is set, the page body because it scrolls vertically. Nothing here is
+    // declared exempt, so nothing here is excused.
+    name: 'a panel pushed off the right edge fails, undeclared scrollers notwithstanding',
+    routes: ['/offscreen-panel'],
+    expect: 'fail',
+    because: 'div.card',
+  },
+  {
     name: 'one bad route fails a run of otherwise good ones',
     routes: ['/', '/scrolling-table', '/clipped-overflow'],
     expect: 'fail',

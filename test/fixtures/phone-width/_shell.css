@@ -5,9 +5,9 @@ body { margin: 0; font: 16px/1.4 system-ui, sans-serif; }
 .rail { flex: 0 0 auto; width: 56px; background: #eee; }
 .rail.wide { width: 240px; }
 .main { flex: 1 1 auto; min-width: 0; padding: 16px; overflow-y: auto; }
-.main.clip { overflow: hidden; }
 h1 { font-size: 20px; margin: 0 0 12px; }
 .card { border: 1px solid #ccc; border-radius: 8px; padding: 12px; }
 .scroller { overflow-x: auto; }
 table { border-collapse: collapse; }
 td, th { border: 1px solid #ccc; padding: 4px 12px; white-space: nowrap; }
+.panel { width: 300px; margin-left: 200px; overflow-y: auto; max-height: 200px; }

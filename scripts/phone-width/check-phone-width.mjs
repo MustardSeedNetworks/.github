@@ -11,9 +11,12 @@
 // check only as a cheap second signal.
 //
 // Deliberately horizontal regions (a wide data table, a carousel) are not
-// defects: an element inside an ancestor whose computed `overflow-x` is `auto`
-// or `scroll` is exempt, as is anything under `[data-phone-width-exempt]`.
-// `overflow: hidden` is NOT an exemption -- that is the clipping case above.
+// defects, but they must SAY SO: put `data-phone-width-exempt` on the scroll
+// container. Computed style cannot tell one from a defect -- CSS forces
+// `overflow-x` to `auto` whenever `overflow-y` is set and `overflow-x` is
+// `visible`, so every `overflow-y-auto` page body in the fleet computes as a
+// horizontal scroller, and inferring intent from that exempted the whole page
+// body on the very shells this gate exists to check.
 
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
@@ -153,19 +156,6 @@ const findOverflow = ({ width, tolerance }) => {
   const exempt = (element) => {
     for (let node = element; node && node !== document.documentElement; node = node.parentElement) {
       if (node.hasAttribute('data-phone-width-exempt')) return true
-      // The element's own overflow does not excuse its own box; an ANCESTOR
-      // that scrolls horizontally does, because the overflow is reachable there.
-      //
-      // The ancestor must ACTUALLY scroll sideways, not merely compute to
-      // `auto`: CSS forces overflow-x to `auto` whenever overflow-y is set and
-      // overflow-x is `visible`, so every `overflow-y-auto` page body in the
-      // fleet computes as a horizontal scroller. Reading the scroll extent
-      // instead keeps `overflow: hidden` — the clipping case — a failure.
-      if (node !== element) {
-        const overflowX = getComputedStyle(node).overflowX
-        const scrolls = node.scrollWidth > node.clientWidth + 1
-        if (scrolls && (overflowX === 'auto' || overflowX === 'scroll')) return true
-      }
     }
     return false
   }
