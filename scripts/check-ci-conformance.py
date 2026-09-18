@@ -496,6 +496,12 @@ def locales_home(root: Path) -> list[str]:
 
     Checking the directory exists is not enough; the alias is what the bundle
     actually reads, so this pins the alias target itself.
+
+    The four repos spell the alias three ways -- a quoted key, a string `find:`
+    and a regular-expression `find:` whose replacement sits on the next line --
+    so the match is on the bare name and the target is looked for in a short
+    window after it. Matching only `'@locales'` would skip seed's vite config
+    entirely and pass it for having no alias at all.
     """
     canonical = "internal/i18n/locales"
     findings = []
@@ -503,17 +509,19 @@ def locales_home(root: Path) -> list[str]:
         path = root / rel
         if not path.exists():
             continue
-        for line in path.read_text(errors="ignore").splitlines():
-            if "'@locales'" not in line and '"@locales"' not in line:
+        lines = path.read_text(errors="ignore").splitlines()
+        for i, line in enumerate(lines):
+            if "@locales" not in line:
                 continue
             if line.lstrip().startswith(("//", "*")):
                 continue
-            if canonical not in line:
-                findings.append(
-                    f"{rel}: the @locales alias does not resolve to "
-                    f"{canonical}/ -- translations live beside the Go package "
-                    f"that embeds them, and the shared i18n gate defaults "
-                    f"LOCALES_DIR there")
+            if canonical in "\n".join(lines[i:i + 3]):
+                continue
+            findings.append(
+                f"{rel}: the @locales alias does not resolve to "
+                f"{canonical}/ -- translations live beside the Go package "
+                f"that embeds them, and the shared i18n gate defaults "
+                f"LOCALES_DIR there")
     tsconfig = root / "ui/tsconfig.app.json"
     if tsconfig.exists():
         for line in tsconfig.read_text(errors="ignore").splitlines():
