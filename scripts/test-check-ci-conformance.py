@@ -249,6 +249,24 @@ class ConformanceChecks(unittest.TestCase):
 
 
 
+    def run_checker_with_vite(self, vite: str) -> tuple[int, str]:
+        """Run the checker over a minimal repo whose vite config is `vite`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".github/workflows").mkdir(parents=True)
+            (root / ".github/workflows/ci.yml").write_text(GOOD_CI)
+            (root / ".github/CODEOWNERS").write_text("* @owner\n")
+            (root / ".github/ci-advisory-jobs.txt").write_text("# none\n")
+            (root / "scripts").mkdir()
+            (root / "scripts/check-banned-vocabulary.py").write_text("")
+            (root / "scripts/check-file-size.sh").write_text("")
+            (root / "ui").mkdir(parents=True)
+            (root / "internal/i18n/locales/en").mkdir(parents=True)
+            (root / "ui/vite.config.ts").write_text(vite)
+            p = subprocess.run([sys.executable, str(CHECKER)], cwd=root,
+                               capture_output=True, text=True)
+            return p.returncode, p.stdout + p.stderr
+
     def test_canonical_locales_alias_is_accepted(self) -> None:
         _, out = self.run_checker(
             GOOD_CI, locales_alias="../internal/i18n/locales")
@@ -275,28 +293,50 @@ class ConformanceChecks(unittest.TestCase):
         as the thing that changed; reading those as live config would fail a
         repo for describing its own history correctly.
         """
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / ".github/workflows").mkdir(parents=True)
-            (root / ".github/workflows/ci.yml").write_text(GOOD_CI)
-            (root / ".github/CODEOWNERS").write_text("* @owner\n")
-            (root / ".github/ci-advisory-jobs.txt").write_text("# none\n")
-            (root / "scripts").mkdir()
-            (root / "scripts/check-banned-vocabulary.py").write_text("")
-            (root / "scripts/check-file-size.sh").write_text("")
-            (root / "ui").mkdir(parents=True)
-            (root / "internal/i18n/locales/en").mkdir(parents=True)
-            (root / "ui/vite.config.ts").write_text(
-                "export default {\n"
-                "  resolve: { alias: [\n"
-                "    // was: { find: '@locales', replacement: './locales' }\n"
-                "    { find: '@locales', "
-                "replacement: '../internal/i18n/locales' },\n"
-                "  ] },\n"
-                "};\n")
-            proc = subprocess.run([sys.executable, str(CHECKER)], cwd=root,
-                                  capture_output=True, text=True)
-            self.assertNotIn("@locales alias", proc.stdout + proc.stderr)
+        _, out = self.run_checker_with_vite(
+            "export default {\n"
+            "  resolve: { alias: [\n"
+            "    // was: { find: '@locales', replacement: './locales' }\n"
+            "    { find: '@locales', "
+            "replacement: '../internal/i18n/locales' },\n"
+            "  ] },\n"
+            "};\n")
+        self.assertNotIn("@locales alias", out)
+
+    def test_a_regex_find_with_the_target_on_the_next_line_is_read(self) -> None:
+        """seed writes the alias as a regex `find:` over two lines.
+
+        Matching only a quoted `'@locales'` key skipped that file outright, so
+        seed passed for appearing to have no alias at all -- the rule was
+        vacuous in one of the four repos it gates.
+        """
+        _, out = self.run_checker_with_vite(
+            "export default {\n"
+            "  resolve: { alias: [\n"
+            "    {\n"
+            "      find: /^@locales\\//,\n"
+            "      replacement: fileURLToPath("
+            "new URL('../internal/i18n/locales/', import.meta.url)),\n"
+            "    },\n"
+            "  ] },\n"
+            "};\n")
+        self.assertNotIn("@locales alias", out)
+
+    def test_a_regex_find_pointing_at_the_frontend_is_rejected(self) -> None:
+        code, out = self.run_checker_with_vite(
+            "export default {\n"
+            "  resolve: { alias: [\n"
+            "    {\n"
+            "      find: /^@locales\\//,\n"
+            "      replacement: fileURLToPath("
+            "new URL('./locales/', import.meta.url)),\n"
+            "    },\n"
+            "  ] },\n"
+            "};\n")
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("@locales alias does not resolve to "
+                      "internal/i18n/locales/", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

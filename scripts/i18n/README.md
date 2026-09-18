@@ -36,6 +36,26 @@ Owned by each product repo — the data that is genuinely local:
 tree · the frontend source root. Those are allow-lists for one codebase's
 lookups, not policy.
 
+## Where the locales live
+
+Every product keeps its translations at **`internal/i18n/locales/`** and reads
+them through a **`@locales`** bundler alias over static JSON imports. That is
+the whole mechanism; there is no runtime fetch and no second copy.
+
+The path is backend-adjacent on purpose. Locales sit beside the Go package that
+embeds them, so the backend and the bundle read the same files rather than two
+trees that drift — seed's API localizes its own validation errors and embeds
+this directory directly. A product only adds that Go loader once its backend
+emits user-facing text; the files live here from the start either way, so the
+day it does there is nothing to move.
+
+`LOCALES_DIR` above defaults to this path, so a product on the layout sets
+nothing. `ci-conformance` pins the alias **target**, not merely the directory's
+existence, in `ui/vite.config.ts`, `ui/vitest.config.ts`, `ui/.storybook/main.ts`
+and the `@locales/*` mapping in `ui/tsconfig.app.json` — an alias pointing
+somewhere else is what actually moves the translations, and it is what stem
+carried until 2026-09-17. A repo with no alias at all is not forced to grow one.
+
 ## Interface
 
 Every path is relative to the repo being checked. A repo on the standard
