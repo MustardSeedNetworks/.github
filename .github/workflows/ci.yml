@@ -87,11 +87,29 @@ jobs:
         with:
           node-version: "26.8.1"
 
+      # One install serves both steps below: the validator binary and the
+      # preset resolver the soak gate imports. It is a lockfile install, like
+      # the phone-width driver, so Renovate can see and bump the pin.
+      - name: Install Renovate
+        working-directory: scripts/renovate-soak
+        run: npm ci --no-audit --no-fund
+
       # default.json is the fleet's dependency policy. Renovate silently
       # ignores a config it cannot parse, so a typo here would not fail
       # anywhere — it would just stop the rules applying, across four repos.
       - name: Validate default.json
-        run: npx --yes --package renovate@42.5.2 -- renovate-config-validator default.json
+        run: scripts/renovate-soak/node_modules/.bin/renovate-config-validator default.json
+
+      # Validation is syntax only. It said nothing while `config:best-practices`
+      # overrode the fleet's seven-day npm soak with three days through the
+      # manager-scoped `npm` object (.github#60), which npm's own
+      # `min-release-age=7` then refused to resolve. This resolves the preset
+      # chain and asserts the declared soak survives it.
+      - name: Check the npm soak survives preset resolution
+        run: |
+          set -euo pipefail
+          node scripts/test-check-renovate-soak.mjs
+          node scripts/renovate-soak/check-renovate-soak.mjs
 
   workflow-lint:
     name: Workflow Lint

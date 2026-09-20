@@ -1,3 +1,7 @@
 # The phone-width gate installs its browser driver here; it is pinned by
 # scripts/phone-width/package-lock.json, not vendored.
 scripts/phone-width/node_modules/
+
+# The soak gate resolves Renovate's own presets, so it needs Renovate
+# itself; pinned by scripts/renovate-soak/package-lock.json, not vendored.
+scripts/renovate-soak/node_modules/

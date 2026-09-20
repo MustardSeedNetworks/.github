@@ -1,0 +1,6 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "default.json's shape before .github#60 was fixed: the soak is declared once at the top level and config:best-practices silently overrides it for npm. The gate must fail this.",
+  "extends": ["config:best-practices"],
+  "minimumReleaseAge": "7 days"
+}
