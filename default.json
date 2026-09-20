@@ -14,6 +14,11 @@
     "at any time"
   ],
   "minimumReleaseAge": "7 days",
+  "npm": {
+    "description": "Restate the fleet soak for npm. `config:best-practices` extends `security:minimumReleaseAgeNpm`, which sets `minimumReleaseAge: \"3 days\"` in this same manager-scoped object, and manager-scoped config beats the top-level value — so the seven days above applied to Go, Actions and pre-commit while npm, the one manager `ui/.npmrc`'s `min-release-age=7` covers, ran on three (.github#60: four PRs raised at 3.1 days, biome 2.5.13/2.5.14, fast-uri 4.1.5, lint-staged 17.5.1). npm then refuses to RESOLVE the version it proposed, the lockfile refresh fails and the PR can never go green. `internalChecksFilter: \"strict\"` is inherited from the same preset and restated because `scripts/check-renovate-soak.mjs` requires it: without strict Renovate opens the PR anyway and only marks the age check pending. The two values MUST stay equal to `min-release-age` in every `ui/.npmrc`.",
+    "minimumReleaseAge": "7 days",
+    "internalChecksFilter": "strict"
+  },
   "prConcurrentLimit": 10,
   "prHourlyLimit": 0,
   "lockFileMaintenance": {

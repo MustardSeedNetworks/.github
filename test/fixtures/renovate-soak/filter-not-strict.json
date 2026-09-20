@@ -1,0 +1,10 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Soak restated but internalChecksFilter relaxed, so Renovate opens the PR and only marks the age check pending. The gate must fail this.",
+  "extends": ["config:best-practices"],
+  "minimumReleaseAge": "7 days",
+  "npm": {
+    "minimumReleaseAge": "7 days",
+    "internalChecksFilter": "none"
+  }
+}
