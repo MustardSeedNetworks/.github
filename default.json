@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest after a short soak: updates are raised once a release is three days old, and everything below a major auto-merges when CI is green. Security updates skip the soak entirely.",
+  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest after a short soak: updates are raised once a release is seven days old, and everything below a major auto-merges when CI is green. Security updates skip the soak entirely.",
   "extends": [
     "config:best-practices",
     ":semanticCommits",
@@ -14,11 +14,6 @@
     "at any time"
   ],
   "minimumReleaseAge": "7 days",
-  "npm": {
-    "description": "Restate the fleet soak for npm. `config:best-practices` extends `security:minimumReleaseAgeNpm`, which sets `minimumReleaseAge: \"3 days\"` in this same manager-scoped object, and manager-scoped config beats the top-level value — so the seven days above applied to Go, Actions and pre-commit while npm, the one manager `ui/.npmrc`'s `min-release-age=7` covers, ran on three (.github#60: four PRs raised at 3.1 days, biome 2.5.13/2.5.14, fast-uri 4.1.5, lint-staged 17.5.1). npm then refuses to RESOLVE the version it proposed, the lockfile refresh fails and the PR can never go green. `internalChecksFilter: \"strict\"` is inherited from the same preset and restated because `scripts/check-renovate-soak.mjs` requires it: without strict Renovate opens the PR anyway and only marks the age check pending. The two values MUST stay equal to `min-release-age` in every `ui/.npmrc`.",
-    "minimumReleaseAge": "7 days",
-    "internalChecksFilter": "strict"
-  },
   "prConcurrentLimit": 10,
   "prHourlyLimit": 0,
   "lockFileMaintenance": {
@@ -33,6 +28,19 @@
     "gomodUpdateImportPaths"
   ],
   "packageRules": [
+    {
+      "description": "The fleet soak for every npm-datasource update: the npm manager AND the custom regex managers that read npm versions (biome.json's schema URL, mk/lint.mk's markdownlint-cli2). `config:best-practices` extends `security:minimumReleaseAgeNpm`, which in current Renovate (44) is a packageRule matching `datasource: npm` with `minimumReleaseAge: \"3 days\"`. A packageRule beats both the top-level value and a manager-scoped `npm` object, so the seven days above never reached npm; restating it under `npm` (.github#85) passed a gate that resolved presets with Renovate 42 and changed nothing on the hosted app — PRs kept arriving at 3.0x days (fast-uri 4.2.1, commitlint 21.2.3, markdownlint-cli2 0.23.3), and a schema-only biome bump outran the package that npm would not yet resolve (.github#68). Rules in this file apply after the preset's, so this one wins whichever shape upstream ships. Scoped to major/minor/patch because the preset deliberately clears the soak for update types that carry no release timestamp (lockFileMaintenance, pin, replacement, bump, rollback); re-imposing it there would mean those updates never arrive. MUST stay equal to `min-release-age` in every `ui/.npmrc`; `scripts/renovate-soak/check-renovate-soak.mjs` asserts it per dependency.",
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict"
+    },
     {
       "description": "Go toolchain, linter, and go.mod deps move together as one PR per repo.",
       "matchManagers": [
@@ -51,9 +59,10 @@
       "groupName": "go toolchain"
     },
     {
-      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR. Both `typescript` and `@typescript/native-preview` are listed so the group keeps covering the compiler across the TS7 stable migration. `@vitest/**` is listed with `vitest` because the scoped packages declare an EXACT peer on it — a PR bumping either half alone fails ERESOLVE and can never go green, which stalled four PRs across three repos before it was noticed.",
+      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR. Both `typescript` and `@typescript/native-preview` are listed so the group keeps covering the compiler across the TS7 stable migration. `@vitest/**` is listed with `vitest` because the scoped packages declare an EXACT peer on it — a PR bumping either half alone fails ERESOLVE and can never go green, which stalled four PRs across three repos before it was noticed. `custom.regex` is listed so the `biome.json` schema URL (its manager is the regex one above, with depName `@biomejs/biome`) rides in the same PR as the package: grouped by manager it was raised alone, merged while the npm half could not resolve, and left every UI repo's `$schema` a version ahead of the installed Biome (.github#68).",
       "matchManagers": [
-        "npm"
+        "npm",
+        "custom.regex"
       ],
       "matchPackageNames": [
         "react",
@@ -180,10 +189,10 @@
         "go install\\s+(?<depName>[^\\s@]+)@(?<currentValue>v[0-9][^\\s'\";\\\\]*)"
       ],
       "datasourceTemplate": "go",
-      "fileMatch": [
-        "^Makefile$",
-        "^mk/.+\\.mk$",
-        "^\\.github/workflows/.+\\.ya?ml$"
+      "managerFilePatterns": [
+        "/^Makefile$/",
+        "/^mk/.+\\.mk$/",
+        "/^\\.github/workflows/.+\\.ya?ml$/"
       ]
     },
     {
@@ -194,8 +203,8 @@
       ],
       "depNameTemplate": "@biomejs/biome",
       "datasourceTemplate": "npm",
-      "fileMatch": [
-        "(^|/)biome\\.json$"
+      "managerFilePatterns": [
+        "/(^|/)biome\\.json$/"
       ]
     },
     {
@@ -206,8 +215,8 @@
       ],
       "depNameTemplate": "markdownlint-cli2",
       "datasourceTemplate": "npm",
-      "fileMatch": [
-        "^mk/lint\\.mk$"
+      "managerFilePatterns": [
+        "/^mk/lint\\.mk$/"
       ]
     },
     {
@@ -218,9 +227,9 @@
       ],
       "depNameTemplate": "github.com/golangci/golangci-lint/v2",
       "datasourceTemplate": "go",
-      "fileMatch": [
-        "^Makefile$",
-        "^mk/lint\\.mk$"
+      "managerFilePatterns": [
+        "/^Makefile$/",
+        "/^mk/lint\\.mk$/"
       ]
     },
     {
@@ -231,8 +240,8 @@
       ],
       "depNameTemplate": "github.com/golangci/golangci-lint/v2",
       "datasourceTemplate": "go",
-      "fileMatch": [
-        "(^|/)tools/lint-linux/Dockerfile$"
+      "managerFilePatterns": [
+        "/(^|/)tools/lint-linux/Dockerfile$/"
       ]
     },
     {
@@ -243,8 +252,8 @@
       ],
       "depNameTemplate": "node",
       "datasourceTemplate": "node-version",
-      "fileMatch": [
-        "^\\.github/workflows/license-check\\.ya?ml$"
+      "managerFilePatterns": [
+        "/^\\.github/workflows/license-check\\.ya?ml$/"
       ]
     }
   ],

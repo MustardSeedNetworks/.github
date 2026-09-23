@@ -101,10 +101,11 @@ jobs:
         run: scripts/renovate-soak/node_modules/.bin/renovate-config-validator default.json
 
       # Validation is syntax only. It said nothing while `config:best-practices`
-      # overrode the fleet's seven-day npm soak with three days through the
-      # manager-scoped `npm` object (.github#60), which npm's own
-      # `min-release-age=7` then refused to resolve. This resolves the preset
-      # chain and asserts the declared soak survives it.
+      # overrode the fleet's seven-day npm soak with three days (.github#60),
+      # which npm's own `min-release-age=7` then refused to resolve. This
+      # resolves the preset chain, applies the package rules to representative
+      # npm updates the way Renovate does per dependency, and asserts the
+      # declared soak and the biome.json schema grouping survive it (.github#68).
       - name: Check the npm soak survives preset resolution
         run: |
           set -euo pipefail

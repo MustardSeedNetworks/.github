@@ -1,11 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "default.json's shape before .github#60 was fixed: the soak is declared once at the top level and config:best-practices silently overrides it for npm. The gate must fail this.",
+  "description": "Soak restated for every npm update type, so lock file maintenance, which has no release timestamp, would never be raised. The gate must fail this.",
   "extends": [
     "config:best-practices"
   ],
   "minimumReleaseAge": "7 days",
   "packageRules": [
+    {
+      "matchDatasources": [
+        "npm"
+      ],
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict"
+    },
     {
       "matchManagers": [
         "npm",

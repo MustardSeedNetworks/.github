@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Soak restated but internalChecksFilter relaxed, so Renovate opens the PR and only marks the age check pending. The gate must fail this.",
+  "description": "Soak restated, but the frontend group matches the npm manager only, so the biome.json schema URL is raised in a PR of its own (.github#68). The gate must fail this.",
   "extends": [
     "config:best-practices"
   ],
@@ -16,12 +16,11 @@
         "patch"
       ],
       "minimumReleaseAge": "7 days",
-      "internalChecksFilter": "none"
+      "internalChecksFilter": "strict"
     },
     {
       "matchManagers": [
-        "npm",
-        "custom.regex"
+        "npm"
       ],
       "matchPackageNames": [
         "@biomejs/biome"
