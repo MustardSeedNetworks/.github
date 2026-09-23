@@ -197,6 +197,32 @@ jobs:
           NODE_PATH: scripts/phone-width/node_modules
         run: node scripts/test-check-phone-width.mjs
 
+  # The fixture cases above prove the checker; this proves the workflow's step
+  # order, which no fixture can. The session fixture answers every route with a
+  # sign-in screen until setup-command has signed in, so a gate that visited
+  # routes before the session existed — or never ran setup-command — fails here
+  # on the missing page header. It calls the workflow from THIS commit, so a
+  # change to phone-width.yml is exercised before any product pins it.
+  phone-width-session-self-test:
+    name: Phone Width Session Self-Test
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/phone-width.yml
+    with:
+      ui-dir: test/fixtures/phone-width-session
+      # Nothing to build: the fixture is served as it stands.
+      install-command: ":"
+      build-command: ":"
+      prepare-command: sh test/fixtures/phone-width-session/make-cert.sh "$RUNNER_TEMP/phone-width-tls"
+      base-url: https://127.0.0.1:8499
+      start-command: TLS_DIR="$RUNNER_TEMP/phone-width-tls" PORT=8499 node test/fixtures/phone-width-session/server.mjs
+      setup-command: node test/fixtures/phone-width-session/sign-in.mjs
+      storage-state: phone-width-session-state.json
+      routes: '["/"]'
+      rail-testid: app-rail
+      primary-action-testid: page-primary-action
+
   conformance-self-test:
     name: Conformance Self-Test
     permissions:
@@ -260,6 +286,7 @@ jobs:
       - renovate-config
       - workflow-lint
       - phone-width
+      - phone-width-session-self-test
       - conformance-self-test
       - conformance-self-test-result
     if: always()

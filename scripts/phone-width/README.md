@@ -99,10 +99,30 @@ Behind authentication:
 ```yaml
     with:
       base-url: https://127.0.0.1:8443
-      start-command: make run-e2e-daemon
+      prepare-command: make build-backend
+      start-command: ./scripts/start-daemon.sh
+      setup-command: node ui/e2e/phone-width-sign-in.mjs
       storage-state: ui/.auth/state.json
       routes: '["/", "/settings"]'
 ```
+
+The steps run in this order: UI build, `prepare-command` (foreground, repo
+root — the backend build, so a compile error fails by name rather than as a
+daemon that never answered), `start-command` (background), wait for
+`base-url`, `setup-command` (foreground), then the routes.
+
+Signing in is `setup-command`'s job, and it cannot be folded into
+`start-command`: the daemon answers `base-url` before any session exists, so
+the gate would start visiting routes while the sign-in was still racing it.
+`setup-command` sees `BASE_URL` and `STORAGE_STATE`, and
+`require('playwright')` resolves to the gate's own driver (it is on
+`NODE_PATH`, which ESM `import` ignores — use `createRequire`), so the sign-in
+needs neither a Playwright of its own nor a browser build to match one.
+`test/fixtures/phone-width-session/sign-in.mjs` is a working example, and CI
+runs this workflow against that fixture on every change here.
+
+The gate's browser accepts the daemon's self-signed certificate: seed, stem
+and niac-go mint their own, and the gate judges layout, not TLS.
 
 Add `phone-width` to `ci-complete`'s `needs:` so it can block a merge. Derive
 `routes` from the repo's own `pageRegistry` — the four products do not expose

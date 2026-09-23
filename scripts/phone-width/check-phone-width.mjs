@@ -263,6 +263,10 @@ async function main() {
     deviceScaleFactor: 3,
     isMobile: true,
     hasTouch: true,
+    // seed, stem and niac-go serve HTTPS on a certificate the daemon minted
+    // itself, so a strict context refuses every route before layout is judged.
+    // The gate checks layout against a loopback daemon, not the certificate.
+    ignoreHTTPSErrors: true,
     ...(args.storageState ? { storageState: args.storageState } : {}),
   })
   const page = await context.newPage()
