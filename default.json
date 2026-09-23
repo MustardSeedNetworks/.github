@@ -106,6 +106,16 @@
       "groupName": "github actions"
     },
     {
+      "description": "Digest pinning is for `uses:` refs only. The github-actions manager also reads tool versions out of known actions' `with:` inputs (depType `uses-with`, e.g. golangci-lint-action's `version: v2.13.2`), and an input holds a version string that cannot carry a digest. The rule above made Renovate propose `pin dependency golangci/golangci-lint to 27774aa` on every repo; the branch can never be written, so it sat under Errored on all four dashboards and hid real errors there (support plan G-11). Version bumps of these inputs still flow.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepTypes": [
+        "uses-with"
+      ],
+      "pinDigests": false
+    },
+    {
       "description": "pre-commit hook revs move as one PR per repo. Enabling the manager alone raised three PRs per repo in one tick and two of them ejected queued PRs; the hooks are dev tooling with no independent risk.",
       "matchManagers": [
         "pre-commit"
