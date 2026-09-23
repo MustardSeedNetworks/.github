@@ -1,10 +1,32 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "The same config with the soak restated for npm. The gate must pass this.",
-  "extends": ["config:best-practices"],
+  "description": "The soak restated as a packageRule matching datasource npm, scoped to timestamped update types, with the biome.json schema URL grouped with the package. The gate must pass this.",
+  "extends": [
+    "config:best-practices"
+  ],
   "minimumReleaseAge": "7 days",
-  "npm": {
-    "minimumReleaseAge": "7 days",
-    "internalChecksFilter": "strict"
-  }
+  "packageRules": [
+    {
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "matchManagers": [
+        "npm",
+        "custom.regex"
+      ],
+      "matchPackageNames": [
+        "@biomejs/biome"
+      ],
+      "groupName": "frontend toolchain"
+    }
+  ]
 }

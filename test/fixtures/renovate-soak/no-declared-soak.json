@@ -1,5 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "No fleet soak declared at all, so there is nothing for npm to agree with. The gate must fail this rather than pass vacuously.",
-  "extends": ["config:best-practices"]
+  "extends": [
+    "config:best-practices"
+  ]
 }

@@ -2,8 +2,9 @@
 // Fixture tests for the npm soak gate. The defect it exists to catch is
 // invisible in the config file — the override arrives through a preset — so
 // a gate that quietly stopped firing would look exactly like a healthy one.
-// Each fixture pins one verdict, including the shape default.json had while
-// .github#60 was open.
+// Each fixture pins one verdict, including both shapes default.json had while
+// .github#60 was open: the bare top-level soak, and the manager-scoped `npm`
+// restatement (.github#85) that a Renovate-42 resolver passed.
 //
 // Run from the repo root, after `npm ci` in scripts/renovate-soak:
 //   node scripts/test-check-renovate-soak.mjs
@@ -24,21 +25,39 @@ const CASES = [
     expect: 'pass',
   },
   {
+    name: 'restating the soak as a datasource packageRule passes',
+    config: join(fixtures, 'restated.json'),
+    expect: 'pass',
+  },
+  {
     name: 'a soak declared only at the top level fails — config:best-practices overrides npm to three days',
     config: join(fixtures, 'inherited-three-days.json'),
     expect: 'fail',
     because: 'not the declared "7 days"',
   },
   {
-    name: 'restating the soak for npm passes',
-    config: join(fixtures, 'restated.json'),
-    expect: 'pass',
+    name: 'restating the soak under the npm manager object fails — the preset packageRule still wins (.github#85)',
+    config: join(fixtures, 'manager-scoped-restatement.json'),
+    expect: 'fail',
+    because: 'biome.json schema URL (custom.regex): effective minimumReleaseAge is "3 days"',
   },
   {
     name: 'a relaxed internalChecksFilter fails',
     config: join(fixtures, 'filter-not-strict.json'),
     expect: 'fail',
     because: 'not "strict"',
+  },
+  {
+    name: 'a soak that also covers lock file maintenance fails — it would never be raised',
+    config: join(fixtures, 'soak-on-lockfile.json'),
+    expect: 'fail',
+    because: 'lockFileMaintenance carries a soak',
+  },
+  {
+    name: 'a biome.json schema URL grouped apart from the package fails (.github#68)',
+    config: join(fixtures, 'schema-ungrouped.json'),
+    expect: 'fail',
+    because: 'not grouped with the @biomejs/biome package',
   },
   {
     name: 'no declared soak fails rather than passing vacuously',

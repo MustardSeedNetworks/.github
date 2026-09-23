@@ -1,10 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "default.json's shape before .github#60 was fixed: the soak is declared once at the top level and config:best-practices silently overrides it for npm. The gate must fail this.",
+  "description": "default.json's shape after .github#85: the soak restated in the manager-scoped npm object. The preset's datasource packageRule still wins, so the hosted app kept raising npm PRs at three days. The gate must fail this.",
   "extends": [
     "config:best-practices"
   ],
   "minimumReleaseAge": "7 days",
+  "npm": {
+    "minimumReleaseAge": "7 days",
+    "internalChecksFilter": "strict"
+  },
   "packageRules": [
     {
       "matchManagers": [

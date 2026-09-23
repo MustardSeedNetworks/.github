@@ -6,21 +6,25 @@
 // never regenerate a lockfile and can never go green (.github#60).
 //
 // The declaration alone does not make it so. `config:best-practices` extends
-// `security:minimumReleaseAgeNpm`, which sets the soak inside a *manager-
-// scoped* `npm` object:
+// `security:minimumReleaseAgeNpm`, and what that preset sets has moved: in
+// Renovate 42 a manager-scoped `npm` object, in 44 a packageRule matching
+// `datasource: npm`. A packageRule is applied per dependency after every
+// config level, so it overrides the top-level soak and any `npm` object alike
+// — and it also reaches the custom regex managers that read npm versions,
+// such as the `biome.json` schema URL (.github#68). Reading the resolved
+// top-level or `npm` value, which is what this gate did first, therefore
+// reports seven days while the hosted app runs on three.
 //
-//   "npm": { "minimumReleaseAge": "3 days", "internalChecksFilter": "strict" }
-//
-// Manager-scoped config beats top-level config, so the fleet's top-level
-// "7 days" applies to Go, Actions and pre-commit but is silently overridden
-// to three days for npm — the one manager the `.npmrc` embargo covers.
-// Nothing reported this: `renovate-config-validator` checks syntax, and the
-// preset is resolved only inside Renovate.
-//
-// So this gate resolves the real preset chain and asserts the soak survives
-// it. It fails if npm's effective soak is not the declared one, and if
-// `internalChecksFilter` is not `strict` — without strict, Renovate raises
-// the PR anyway and only marks the internal check pending.
+// So the gate resolves the real preset chain and then applies the package
+// rules to one representative update per shape that matters, the way
+// Renovate does for each dependency, and asserts the outcome:
+//   - every npm-datasource update of a timestamped type carries the declared
+//     soak with `internalChecksFilter: "strict"` (without strict Renovate
+//     opens the PR anyway and only marks the age check pending);
+//   - lock file maintenance does not — it has no release timestamp, so a soak
+//     there means the update never arrives;
+//   - the biome.json schema URL shares a group with the @biomejs/biome
+//     package, so the two cannot land apart.
 //
 // Run from the repo root, after `npm ci` in this directory:
 //   node scripts/renovate-soak/check-renovate-soak.mjs [config.json]
@@ -32,33 +36,74 @@ const configPath = process.argv[2] ?? 'default.json'
 const { resolveConfigPresets } = await import(
   'renovate/dist/config/presets/index.js'
 )
+const { applyPackageRules } = await import(
+  'renovate/dist/util/package-rules/index.js'
+)
+const { mergeChildConfig } = await import('renovate/dist/config/utils.js')
 
-const resolved = await resolveConfigPresets(
+const { config: resolved } = await resolveConfigPresets(
   JSON.parse(readFileSync(configPath, 'utf8')),
 )
 
-const declared = resolved.minimumReleaseAge
-const npmSoak = resolved.npm?.minimumReleaseAge
-const npmFilter = resolved.npm?.internalChecksFilter
+// Manager-scoped config is merged into the base before package rules run.
+const effective = (update) =>
+  applyPackageRules({
+    ...mergeChildConfig(resolved, resolved[update.manager] ?? {}),
+    ...update,
+  })
 
+const biome = { depName: '@biomejs/biome', packageName: '@biomejs/biome' }
+const SOAKED = [
+  { label: 'npm patch', manager: 'npm', datasource: 'npm', updateType: 'patch', ...biome },
+  { label: 'npm minor', manager: 'npm', datasource: 'npm', updateType: 'minor', depName: 'fast-uri', packageName: 'fast-uri' },
+  { label: 'npm major', manager: 'npm', datasource: 'npm', updateType: 'major', depName: 'lint-staged', packageName: 'lint-staged' },
+  { label: 'biome.json schema URL (custom.regex)', manager: 'custom.regex', datasource: 'npm', updateType: 'patch', ...biome },
+]
+
+const declared = resolved.minimumReleaseAge
 const failures = []
 
 if (!declared) {
   failures.push(
     `${configPath} declares no top-level minimumReleaseAge; the fleet soak has to be stated somewhere`,
   )
-} else if (npmSoak !== declared) {
+} else {
+  for (const update of SOAKED) {
+    const got = await effective(update)
+    if (got.minimumReleaseAge !== declared) {
+      failures.push(
+        `${update.label}: effective minimumReleaseAge is ${JSON.stringify(got.minimumReleaseAge)}, not the declared ${JSON.stringify(declared)}.\n` +
+          '  A preset packageRule is overriding it. Restate it as a packageRule matching `datasource: npm`.',
+      )
+    }
+    if (got.internalChecksFilter !== 'strict') {
+      failures.push(
+        `${update.label}: effective internalChecksFilter is ${JSON.stringify(got.internalChecksFilter)}, not "strict".\n` +
+          '  Without strict, Renovate raises the PR and only marks the age check pending.',
+      )
+    }
+  }
+}
+
+const lockFile = await effective({
+  manager: 'npm',
+  datasource: 'npm',
+  updateType: 'lockFileMaintenance',
+  isLockFileMaintenance: true,
+})
+if (lockFile.minimumReleaseAge) {
   failures.push(
-    `npm's effective minimumReleaseAge is ${JSON.stringify(npmSoak)}, not the declared ${JSON.stringify(declared)}.\n` +
-      "  A preset is overriding it through the manager-scoped `npm` object.\n" +
-      `  Restate it in ${configPath}: "npm": { "minimumReleaseAge": ${JSON.stringify(declared)} }`,
+    `npm lockFileMaintenance carries a soak of ${JSON.stringify(lockFile.minimumReleaseAge)}; it has no release timestamp, so it would never be raised.\n` +
+      '  Scope the soak rule with matchUpdateTypes.',
   )
 }
 
-if (npmFilter !== 'strict') {
+const pkgGroup = (await effective(SOAKED[0])).groupName
+const schemaGroup = (await effective(SOAKED[3])).groupName
+if (!pkgGroup || pkgGroup !== schemaGroup) {
   failures.push(
-    `npm's effective internalChecksFilter is ${JSON.stringify(npmFilter)}, not "strict".\n` +
-      '  Without strict, Renovate raises the PR and only marks the age check pending.',
+    `the biome.json schema URL is not grouped with the @biomejs/biome package (package ${JSON.stringify(pkgGroup)}, schema ${JSON.stringify(schemaGroup)}).\n` +
+      '  Grouped apart, the schema-only PR merges while the package waits and $schema runs ahead of the installed Biome.',
   )
 }
 
@@ -69,5 +114,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `OK: npm soak ${JSON.stringify(npmSoak)} matches the declared ${JSON.stringify(declared)}, internalChecksFilter "strict"`,
+  `OK: ${SOAKED.length} npm-datasource updates soak ${JSON.stringify(declared)} with internalChecksFilter "strict"; lockFileMaintenance unsoaked; biome.json schema grouped with the package in ${JSON.stringify(pkgGroup)}`,
 )
