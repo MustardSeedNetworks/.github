@@ -42,8 +42,9 @@ A product-local edit fails `ci-conformance` by construction. A repo with no
 
 ## Scope
 
-Colour tokens plus the small component layer built on them (`.kicker`,
-`.figure`, `.panel`, `.target`). A product's own type scale is **not** here —
+Colour tokens, including the status pill text tokens, plus the small
+component layer built on them (`.kicker`, `.figure`, `.panel`, `.target`).
+A product's own type scale is **not** here —
 `seed`, `stem` and `niac-go` define `.heading-1`, `.body-small` and the
 `.gap-*` helpers in their own `index.css`, and `trellis` should too.
 
@@ -64,18 +65,53 @@ family.
 **Six of those eight are under 4.5:1 as text on their worst surface.** This
 table used to claim "each dark value is at least 4.5:1 on the dark page
 ground", which was true and beside the point: the page ground is the *easiest*
-surface, and the same token on a hovered row is a full point worse. The hues
-are owner-approved (set C, 2026-09-15) and a brand anchor is not a thing a
-driver re-picks, so they are recorded here as measured and left alone; the
-decision is the owner's.
-
-Until it is made, a product hue is safe as a fill, an icon or large text, and
-not as small text on `surface-hover` or `surface-sunken`. Each repo can measure
+surface, and the same token on a hovered row is a full point worse. The owner
+kept the hues (2026-09-22) and asked for separate high-contrast pill text
+instead (below). A product hue is safe as a fill, an icon or large text, not
+as small text on `surface-hover` or `surface-sunken`. Each repo can measure
 its own file:
 
 ```sh
 python3 scripts/check-theme-contrast.py --product ui/src/theme/product-<name>.css
 ```
+
+## Pill text
+
+A status pill paints its hue as a 5–20 % wash and labels it in the same hue.
+That fails at every usable alpha, because the wash pulls the ground toward the
+text: the bare status hues measure 3.45–3.71:1 on their own /20 wash. So a
+pill's label takes a `-strong` token, the smallest same-hue lightness step
+that reaches 4.6:1 on a /20 wash over every panel surface (UI-FLEET-3,
+[.github#74](https://github.com/MustardSeedNetworks/.github/issues/74)).
+
+The rule, gated in each product by `ui/src/theme/pillText.test.ts`: an
+element carrying `bg-<hue>/N` (N under 50, any variant prefix) and
+`text-<hue>` takes `text-<hue>-strong`. Icons keep the bare hue. A wash above
+/20 is refused, because /20 is the darkest ground the tokens are measured on.
+
+The status four are in `msn-shared.css`:
+
+| Token | Light | Dark |
+| --- | --- | --- |
+| `--color-status-success-strong` | `#235e3a` | `#56c785` |
+| `--color-status-warning-strong` | `#6d4e07` | `#deab34` |
+| `--color-status-error-strong` | `#932e2e` | `#e5a2a2` |
+| `--color-status-info-strong` | `#0f548f` | `#7eb8ea` |
+
+`--color-brand-primary-strong` is per product, derived from the set C hue the
+same way, in each `product-<name>.css`:
+
+| Product | Light | Dark |
+| --- | --- | --- |
+| `seed` | `#24602d` | `#45c956` |
+| `stem` | `#11529d` | `#76adeb` |
+| `niac` | `#633b9e` | `#ba9de2` |
+| `trellis` | `#8a3466` | `#df90be` |
+
+`check-theme-contrast.py` measures every `-strong` token on its hue's wash at
+/5, /10, /15 and /20 over each panel surface; pass `--table` to print the
+worst ratio per alpha. Derive a new value with an HSL-lightness step of 0.002
+or finer: a coarser step lands on different hex values than the ones above.
 
 ## Dark mode
 

@@ -17,6 +17,11 @@ the set a component can compose, and fails on any pair under its floor:
                         applies to these tokens)
     UI edge     3.0:1   WCAG 2.2 AA, 1.4.11
 
+Pill text is measured where a pill puts it: a `-strong` token on a 5-20 %
+wash of its own hue over each panel surface (WASH_ROLES). Same-hue text on a
+same-hue wash fails at every usable alpha, because the wash pulls the ground
+toward the text, which is why the pill tokens exist (owner 2026-09-22).
+
 A pair that genuinely cannot occur is exempt by name in EXEMPT with the
 reason, so the exemption is reviewable in the diff. An exemption is not a
 silenced finding — it is a claim that the composition does not exist.
@@ -35,6 +40,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 TEXT_FLOOR = 4.5
@@ -83,6 +89,19 @@ TEXT_ROLES: dict[str, list[str]] = {
     "brand-primary": SURFACES,
     "brand-accent": SURFACES,
     "text-accent": SURFACES,
+}
+
+# Pill text: each -strong token against a wash of the hue it pairs with, at
+# every alpha the pill recipe allows. `bg-<hue>/N` with N above 20 is refused
+# by the product gates (pillText.test.ts), so /20 is the darkest ground a pill
+# can have. brand-primary-strong is present only when --product is given.
+WASH_ALPHAS = (0.05, 0.10, 0.15, 0.20)
+WASH_ROLES: dict[str, str] = {
+    "status-success-strong": "status-success",
+    "status-warning-strong": "status-warning",
+    "status-error-strong": "status-error",
+    "status-info-strong": "status-info",
+    "brand-primary-strong": "brand-primary",
 }
 
 # Boundaries that carry meaning: 1.4.11, not 1.4.3. A form control's edge IS
@@ -159,8 +178,35 @@ def palettes(paths: list[Path]) -> dict[str, dict[str, tuple[int, int, int, floa
     return out
 
 
+def wash(hue: tuple[int, int, int, float], alpha: float,
+         surface: tuple[int, int, int, float]) -> tuple[int, int, int, float]:
+    """The ground a pill paints: its hue at `alpha` over a surface."""
+    return composite((*hue[:3], alpha), surface)
+
+
+def wash_pairs(
+    palette: dict[str, tuple[int, int, int, float]],
+) -> Iterator[tuple[str, str, float, str, float]]:
+    """(text token, hue, alpha, surface, ratio) for every pill ground present."""
+    for role, hue in WASH_ROLES.items():
+        fg, tint = palette.get(role), palette.get(hue)
+        if fg is None or tint is None:
+            continue
+        for alpha in WASH_ALPHAS:
+            for surface in PANELS:
+                bg = palette.get(surface)
+                if bg is not None:
+                    yield role, hue, alpha, surface, contrast(fg, wash(tint, alpha, bg))
+
+
 def check(palette: dict[str, tuple[int, int, int, float]], mode: str) -> list[str]:
     findings = []
+    for role, hue, alpha, surface, ratio in wash_pairs(palette):
+        if ratio < TEXT_FLOOR:
+            findings.append(
+                f"{mode}: --color-{role} on a {alpha:.0%} --color-{hue} wash over "
+                f"--color-{surface} is {ratio:.2f}:1, under the {TEXT_FLOOR}:1 text floor"
+            )
     for roles, floor, kind in ((TEXT_ROLES, TEXT_FLOOR, "text"), (EDGE_ROLES, EDGE_FLOOR, "UI edge")):
         for role, grounds in roles.items():
             fg = palette.get(role)
@@ -212,6 +258,12 @@ def main() -> int:
                     if surface in palette[mode]
                 ]
                 print(f"  {role:16} " + "  ".join(cells))
+            worst: dict[tuple[str, float], float] = {}
+            for role, _hue, alpha, _surface, ratio in wash_pairs(palette[mode]):
+                worst[role, alpha] = min(ratio, worst.get((role, alpha), ratio))
+            for role in dict.fromkeys(r for r, _ in worst):
+                cells = [f"/{alpha * 100:<3.0f}{worst[role, alpha]:5.2f}" for alpha in WASH_ALPHAS]
+                print(f"  {role:21} worst on a wash  " + "  ".join(cells))
         findings += check(palette[mode], mode)
 
     for finding in findings:

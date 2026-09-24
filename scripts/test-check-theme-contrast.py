@@ -115,6 +115,70 @@ class Findings(unittest.TestCase):
         self.assertEqual(run(css), [])
 
 
+class PillText(unittest.TestCase):
+    """A -strong token is pill text: it sits on its own hue's wash, not on a
+    bare surface, so a bare-surface measurement passes it vacuously."""
+
+    def test_strong_text_failing_only_on_its_own_wash_is_caught(self) -> None:
+        # #2a7146 is 5.92:1 on white, so every bare-surface pair passes; on a
+        # /20 wash of #1e6b3f it is 4.37:1.
+        findings = run(palette_css(**{
+            "status-success": "#1e6b3f",
+            "status-success-strong": "#2a7146",
+        }))
+        strong = [f for f in findings if "--color-status-success-strong" in f]
+        self.assertTrue(strong, findings)
+        self.assertIn("20% --color-status-success wash", strong[0])
+        self.assertIn("4.5:1 text floor", strong[0])
+
+    def test_strong_text_clearing_every_wash_passes(self) -> None:
+        findings = run(palette_css(**{
+            "status-success": "#1e6b3f",
+            "status-success-strong": "#1b4d2f",
+        }))
+        self.assertEqual(findings, [])
+
+    def test_a_wash_failing_over_one_surface_only_is_caught(self) -> None:
+        """#74's shape again, on a pill: /20 over white is 5.08:1, over a
+        darker sunken surface 3.99:1. Every panel surface is a pill ground."""
+        findings = run(palette_css(**{
+            "surface-sunken": "#e0e0e0",
+            "status-success": "#1e6b3f",
+            "status-success-strong": "#256640",
+        }))
+        strong = [f for f in findings if "--color-status-success-strong" in f]
+        self.assertTrue(strong, findings)
+        self.assertTrue(all("--color-surface-sunken" in f for f in strong), strong)
+
+    def test_strong_without_its_base_hue_is_skipped(self) -> None:
+        """A wash needs the hue it is mixed from; no hue, no pair to claim."""
+        self.assertEqual(run(palette_css(**{"brand-primary-strong": "#1b4d2f"})), [])
+
+    def test_table_prints_the_wash_rows(self) -> None:
+        """--table walks every role; a wash role must not KeyError there."""
+        import contextlib
+        import io
+        import sys
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "theme.css"
+            path.write_text(palette_css(**{
+                "status-success": "#1e6b3f",
+                "status-success-strong": "#1b4d2f",
+            }), encoding="utf-8")
+            out = io.StringIO()
+            argv = sys.argv
+            sys.argv = ["check-theme-contrast.py", str(path), "--table"]
+            try:
+                with contextlib.redirect_stdout(out):
+                    code = contrast.main()
+            finally:
+                sys.argv = argv
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertIn("status-success-strong", out.getvalue())
+        self.assertIn("/20", out.getvalue())
+
+
 class Canonical(unittest.TestCase):
     def test_the_shipped_theme_passes_its_own_gate(self) -> None:
         pal = contrast.palettes([REPO / "ui/theme/msn-shared.css"])
@@ -127,6 +191,14 @@ class Canonical(unittest.TestCase):
         self.assertIn("text-muted", pal["light"])
         self.assertIn("text-muted", pal["dark"])
         self.assertNotEqual(pal["light"]["text-muted"], pal["dark"]["text-muted"])
+
+    def test_the_status_pill_text_tokens_are_canonical(self) -> None:
+        """All four products carried identical status -strong values in their
+        own product-<name>.css (UI-FLEET-3 phase 1); the fleet value lives here."""
+        pal = contrast.palettes([REPO / "ui/theme/msn-shared.css"])
+        for mode in ("light", "dark"):
+            for hue in ("success", "warning", "error", "info"):
+                self.assertIn(f"status-{hue}-strong", pal[mode], mode)
 
 
 if __name__ == "__main__":
