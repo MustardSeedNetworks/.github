@@ -30,7 +30,7 @@ on:
         description: "Node.js version for the npm license scan."
         type: string
         required: false
-        default: "26.8.1"
+        default: "26.10.0"
 
 permissions:
   contents: read

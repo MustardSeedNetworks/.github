@@ -31,13 +31,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/apt-install
       - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-      - run: pipx install zizmor==1.29.0
+      - run: pipx install zizmor==1.30.1
       - run: npx --yes --package renovate@42.5.2 -- renovate-config-validator default.json
 """
 
 GOOD_DOCKERFILE = """\
-FROM golang:1.27.0-bookworm
-ARG GOLANGCI_VERSION=v2.13.2
+FROM golang:1.27.1-bookworm
+ARG GOLANGCI_VERSION=v2.14.0
 RUN go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}
 """
 
@@ -67,7 +67,7 @@ class SelfPinGate(unittest.TestCase):
         self.assertIn("pin a version", out)
 
     def test_unpinned_pipx_install_is_rejected(self) -> None:
-        bad = GOOD_WORKFLOW.replace("zizmor==1.29.0", "zizmor")
+        bad = GOOD_WORKFLOW.replace("zizmor==1.30.1", "zizmor")
         code, out = self.run_checker(workflow=bad)
         self.assertNotEqual(code, 0, out)
         self.assertIn("==<version>", out)
@@ -91,19 +91,19 @@ class SelfPinGate(unittest.TestCase):
         self.assertNotIn("./.github/actions/apt-install", out)
 
     def test_floating_base_image_is_rejected(self) -> None:
-        bad = GOOD_DOCKERFILE.replace("golang:1.27.0-bookworm", "golang:latest")
+        bad = GOOD_DOCKERFILE.replace("golang:1.27.1-bookworm", "golang:latest")
         code, out = self.run_checker(dockerfile=bad)
         self.assertNotEqual(code, 0, out)
         self.assertIn("pin a concrete tag", out)
 
     def test_untagged_base_image_is_rejected(self) -> None:
-        bad = GOOD_DOCKERFILE.replace("golang:1.27.0-bookworm", "golang")
+        bad = GOOD_DOCKERFILE.replace("golang:1.27.1-bookworm", "golang")
         code, out = self.run_checker(dockerfile=bad)
         self.assertNotEqual(code, 0, out)
         self.assertIn("pin a concrete tag", out)
 
     def test_floating_version_arg_is_rejected(self) -> None:
-        bad = GOOD_DOCKERFILE.replace("GOLANGCI_VERSION=v2.13.2", "GOLANGCI_VERSION=latest")
+        bad = GOOD_DOCKERFILE.replace("GOLANGCI_VERSION=v2.14.0", "GOLANGCI_VERSION=latest")
         code, out = self.run_checker(dockerfile=bad)
         self.assertNotEqual(code, 0, out)
         self.assertIn("pin a concrete version", out)
