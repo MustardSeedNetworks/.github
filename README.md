@@ -14,6 +14,7 @@ The goal: make a fleet-wide change by editing **one file here**, not three repos
 | `SECURITY.md`, `CODE_OF_CONDUCT.md` | Org-wide defaults GitHub applies to every repo that has no file of its own. Product repos keep their own. |
 | `ui/theme/msn-shared.css` | The canonical shared interface theme. Every UI repo keeps a byte-identical copy at `ui/src/theme/msn-shared.css`; `ci-conformance` compares them by sha256. See `ui/theme/README.md`. |
 | `scripts/phone-width/` | The fleet's 390×844 gate — one definition of "works at phone width", run through the reusable `phone-width.yml`. Adopted per repo, so a new rule never goes live fleet-wide unannounced. See `scripts/phone-width/README.md`. |
+| `scripts/fleet-status.py` | Writes the fleet `STATUS.md`: plans of record, open PRs, CI on main, releases, and — on the driver host — driver health and working trees. `fleet-status.yml` runs the GitHub half on dispatch. |
 | `scripts/i18n/` | The fleet i18n gate — one canonical copy of the checks; each repo keeps only its own glossary, banned vocabulary and locales. See `scripts/i18n/README.md`. |
 
 ## Discipline
