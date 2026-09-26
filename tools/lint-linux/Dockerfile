@@ -12,9 +12,9 @@
 # rule -- and a stale Go base reports stdlib-named errors that look like
 # code defects but are toolchain skew. Bump LINT_LINUX_TAG in the consuming
 # repo whenever either changes, so a rebuild is actually picked up.
-FROM golang:1.27.0-bookworm
+FROM golang:1.27.1-bookworm
 
-ARG GOLANGCI_VERSION=v2.13.2
+ARG GOLANGCI_VERSION=v2.14.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libpcap-dev \
