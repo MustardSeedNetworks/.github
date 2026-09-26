@@ -50,11 +50,14 @@ BANNED_FILE="${BANNED_FILE:-$SCRIPT_DIR/banned-vocab.txt}"
 # "Pro" in the sense of "professional", not the license tier brand).
 # One `namespace.key.path` per line, comments with #.
 GLOSSARY_EXCEPTIONS="${GLOSSARY_EXCEPTIONS:-scripts/i18n/glossary-exceptions.txt}"
+# The repo's ratchet of hardcoded copy in shapes the JSX-text scan cannot see
+# (a copy-bearing prop value, a prose string literal). See check-copy.py.
+COPY_BASELINE="${COPY_BASELINE:-scripts/i18n/copy-baseline.txt}"
 PRIMARY="en"
 SECONDARY_LOCALES=(es)
 
 # The python helpers read these directly rather than via arguments.
-export LOCALES_DIR UI_SRC_DIR
+export LOCALES_DIR UI_SRC_DIR COPY_BASELINE
 export DYNAMIC_PREFIXES="${DYNAMIC_PREFIXES:-scripts/i18n/dynamic-prefixes.txt}"
 
 # -----------------------------------------------------------------------------
@@ -386,6 +389,31 @@ check_hardcoded_jsx() {
 }
 
 # -----------------------------------------------------------------------------
+# Check: hardcoded copy outside JSX text nodes (ratchet against a baseline)
+# -----------------------------------------------------------------------------
+check_hardcoded_copy() {
+  section "Hardcoded copy in props and string literals"
+  [ ! -d "$UI_SRC_DIR" ] && { warn "UI_SRC_DIR missing; skipping"; return; }
+
+  # Promoted from seed, where it ran as scripts/check-i18n-copy.py. A repo
+  # adopts it by committing its baseline — empty is a valid baseline — so until
+  # then this is reported as not run, the way the extraction gate is, and never
+  # mistaken for a pass.
+  if [ ! -f "$COPY_BASELINE" ]; then
+    warn "COPY_BASELINE=$COPY_BASELINE missing — copy gate not run (adopt by committing the baseline)"
+    return
+  fi
+  local out
+  if ! out=$(python3 "$SCRIPT_DIR/check-copy.py" 2>&1); then
+    fail "hardcoded copy not in $COPY_BASELINE:"
+    echo "$out" | grep -v "^::error file" | sed 's/^/      /' | head -40
+    echo "$out" | grep "^::error file" || true
+    return
+  fi
+  ok "$(echo "$out" | tail -1)"
+}
+
+# -----------------------------------------------------------------------------
 # Check: source-code t() calls have matching EN locale keys.
 # Delegates to scripts/i18n/check-keys.py, which performs the actual
 # cross-reference (regex + per-file useTranslation alias resolution).
@@ -548,6 +576,7 @@ run_check check_plural_completeness
 run_check check_key_usage
 run_check check_locked_versions
 run_check check_hardcoded_jsx
+run_check check_hardcoded_copy
 
 # Last because it is the slowest — it shells out to npm. --quick skips it.
 if [ "$QUICK" -eq 0 ]; then

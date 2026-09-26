@@ -41,6 +41,7 @@ jobs:
           set -euo pipefail
           python3 scripts/i18n/test-check-keys.py
           python3 scripts/i18n/test-es-fill.py
+          python3 scripts/i18n/test-check-copy.py
 
       # The conformance script gates every product repo, so a rule that
       # silently stops firing weakens all four at once. These fixtures assert
