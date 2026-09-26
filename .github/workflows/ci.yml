@@ -66,6 +66,11 @@ jobs:
       - name: Check this repo's own pins
         run: python3 scripts/check-self-pins.py
 
+      # The fleet STATUS.md is only useful if a red main, an unreadable repo or
+      # a stalled plan row reaches the page; these feed each in and look for it.
+      - name: Run the fleet-status tests
+        run: python3 scripts/test-fleet-status.py
+
       # A syntax error in the conformance script fails every product repo's
       # ci-conformance job, so compiling it here turns that into a local failure.
       - name: Compile every policy script

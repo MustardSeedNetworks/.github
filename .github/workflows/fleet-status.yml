@@ -1,0 +1,73 @@
+# Fleet STATUS.md from GitHub alone: plans, open PRs, CI on main, releases.
+#
+# One dispatch writes the page (job summary + `fleet-status` artifact). The
+# driver host's daily digest (driver-host-migration D8) runs the script itself
+# with its host-only inputs added — the watchdog state and the working trees
+# on disk — which a GitHub runner cannot see; here those two sections say
+# "Not collected" rather than reading as empty.
+#
+# TOKEN: the msn-ci-bot App, scoped to the repositories below, read-only.
+# msn-plans is private, so its checkout needs the App; the installation holds
+# no `actions` or `checks` permission, so "CI on main" for a private repo
+# reads "unreadable" in its cell. Requesting a permission the installation
+# lacks fails the mint outright (see ci-conformance-schedule.yml), so the fix
+# for that is an owner grant on the App, not a line here.
+
+name: Fleet status
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  status:
+    name: Fleet status
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out this repo (script source)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: dotgithub
+
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: MustardSeedNetworks
+          # Keep in step with DEFAULT_REPOS in scripts/fleet-status.py, plus
+          # msn-plans for the checkout.
+          repositories: >-
+            msn-plans,seed,stem,niac-go,trellis,foundation,.github,
+            msn-docs-internal,msn-internal-tools,niac-demo-catalog,
+            mustardseednetworks-com,niac-java
+          permission-contents: read
+          permission-pull-requests: read
+
+      - name: Check out msn-plans
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/msn-plans
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: plans
+
+      - name: Write STATUS.md
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          python3 dotgithub/scripts/fleet-status.py --plans plans --output STATUS.md
+          cat STATUS.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload STATUS.md
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fleet-status
+          path: STATUS.md
