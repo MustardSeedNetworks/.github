@@ -15,8 +15,10 @@ Shared here — the checks themselves, which carry no product knowledge:
 | `validate.sh` | the gate; orchestrates every check below |
 | `check-keys.py` | `t()` / `<Trans i18nKey>` ↔ locale key cross-reference |
 | `check-source.py` | hardcoded English JSX text |
+| `check-copy.py` | hardcoded copy in props and literals, ratcheted |
 | `semgrep-i18n.py` + `semgrep-i18n.yml` | banned `t('key', 'fallback')` forms |
 | `test-check-keys.py` | self-test for the checker |
+| `test-check-copy.py` | self-test for the copy ratchet |
 
 Also shared, because they encode fleet policy rather than product data:
 
@@ -32,7 +34,8 @@ override for a repo that genuinely needs one.
 
 Owned by each product repo — the data that is genuinely local:
 
-`scripts/i18n/glossary-exceptions.txt` · `dynamic-prefixes.txt` · the locale
+`scripts/i18n/glossary-exceptions.txt` · `dynamic-prefixes.txt` ·
+`copy-baseline.txt` · the locale
 tree · the frontend source root. Those are allow-lists for one codebase's
 lookups, not policy.
 
@@ -70,6 +73,7 @@ Go-embedded layout needs to set nothing.
 | `BANNED_FILE` | `scripts/i18n/banned-vocab.txt` |
 | `GLOSSARY_EXCEPTIONS` | `scripts/i18n/glossary-exceptions.txt` |
 | `DYNAMIC_PREFIXES` | `scripts/i18n/dynamic-prefixes.txt` |
+| `COPY_BASELINE` | `scripts/i18n/copy-baseline.txt` |
 
 ## Using it from CI
 
@@ -138,6 +142,30 @@ belong in one tool. `test-es-fill.py` pins that guarantee.
 `msn-docs-internal/05-Engineering/I18N_TRANSLATION_MEMORY.md` the way
 `glossary.txt` mirrors the glossary doc — the docs repo is private and a shared
 CI action cannot read it. Refresh it with `extract-translation-memory.py`.
+
+## Hardcoded copy outside text nodes
+
+`check-source.py` sees bare JSX text and nothing else, so
+`<IconButton aria-label="Refresh" />`, `empty="No alerts match"` and
+`{loading ? 'Loading…' : n}` all pass it. `check-copy.py` scans for those two
+shapes — a copy-bearing prop value and a capitalised multi-word string literal
+outside a `t()` call — and was seed's `scripts/check-i18n-copy.py` until it was
+promoted here.
+
+No repo was at zero when it moved, so it is a ratchet rather than a block. Each
+repo commits `scripts/i18n/copy-baseline.txt`: one `<file> <kind> <text>` entry
+per existing site, `#` lines for the reason, no line numbers. A new site fails;
+an entry that no longer matches fails too, so the list can only shrink. An
+empty file is a valid baseline and means the repo is held at zero.
+
+A repo adopts it by committing that file. Until then the check is reported as
+not run, never as passed. To draft a baseline, run the gate against an empty
+one and turn each reported site into an entry with a reason:
+
+```bash
+: > scripts/i18n/copy-baseline.txt
+python3 ~/.cache/msn-shared/<sha>/scripts/i18n/check-copy.py
+```
 
 ## Adding a repo
 

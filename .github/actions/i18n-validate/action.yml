@@ -38,6 +38,12 @@ inputs:
     description: 'Per-key allow-list for glossary false positives.'
     required: false
     default: 'scripts/i18n/glossary-exceptions.txt'
+  copy-baseline:
+    description: >-
+      Ratchet of hardcoded copy in props and string literals (check-copy.py).
+      The copy check is reported as not run until this file exists.
+    required: false
+    default: 'scripts/i18n/copy-baseline.txt'
   dynamic-prefixes:
     description: >-
       Key prefixes consumed by data-driven lookup rather than a literal t()
@@ -74,6 +80,10 @@ runs:
       shell: bash
       run: python3 "${{ github.action_path }}/../../../scripts/i18n/test-es-fill.py"
 
+    - name: Self-test the hardcoded-copy ratchet
+      shell: bash
+      run: python3 "${{ github.action_path }}/../../../scripts/i18n/test-check-copy.py"
+
     - name: Validate i18n
       shell: bash
       env:
@@ -83,4 +93,5 @@ runs:
         BANNED_FILE: ${{ inputs.banned-file }}
         GLOSSARY_EXCEPTIONS: ${{ inputs.glossary-exceptions }}
         DYNAMIC_PREFIXES: ${{ inputs.dynamic-prefixes }}
+        COPY_BASELINE: ${{ inputs.copy-baseline }}
       run: bash "${{ github.action_path }}/../../../scripts/i18n/validate.sh"
