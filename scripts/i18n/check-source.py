@@ -36,15 +36,16 @@ UI_SRC = ROOT / os.environ.get("UI_SRC_DIR", "ui/src")
 SKIP_PARTS = ("/node_modules/", "/test/", "/__stories__/")
 SKIP_SUFFIX = (".d.ts", ".test.ts", ".test.tsx", ".stories.tsx")
 
-# A JSX text node: everything between a closing '>' and the next '<' that
-# contains no braces (an interpolation means the text is already dynamic) and
-# no angle brackets (that would be another tag).
-TEXT_NODE = re.compile(r">([^<>{}]+)<", re.DOTALL)
+# A JSX text run: everything after a closing '>' up to the next tag or
+# interpolation. It ends at '{' as well as '<', because "the daemon's{' '}<code>"
+# is English up to the brace. An '=>' is an arrow, not a tag.
+TEXT_NODE = re.compile(r"(?<!=)>([^<>{}]+)[<{]", re.DOTALL)
 
-# English prose: two or more words, the first being Capitalised-then-lowercase.
-# "RFC 2544 Switch Tests" is not matched (RF is two capitals), nor is a bare
-# "Reflector", nor lowercase code fragments.
-PROSE = re.compile(r"^[A-Z][a-z]+(?:[\s,.!?:;'’-]+\S+)+", re.DOTALL)
+# English copy: a Capitalised-then-lowercase word, alone or leading more.
+# A single word counts — `<h2>Statistics</h2>` is a heading a Spanish operator
+# reads in English. "RFC 2544" (RF is two capitals) and lowercase code
+# fragments are not matched.
+PROSE = re.compile(r"^[A-Z][a-z]+(?:[\s,.!?:;'’-]+\S+)*", re.DOTALL)
 
 
 def blank_comments(text: str) -> str:

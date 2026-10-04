@@ -18,6 +18,7 @@ Shared here — the checks themselves, which carry no product knowledge:
 | `check-copy.py` | hardcoded copy in props and literals, ratcheted |
 | `semgrep-i18n.py` + `semgrep-i18n.yml` | banned `t('key', 'fallback')` forms |
 | `test-check-keys.py` | self-test for the checker |
+| `test-check-source.py` | self-test for the JSX-text gate |
 | `test-check-copy.py` | self-test for the copy ratchet |
 
 Also shared, because they encode fleet policy rather than product data:
@@ -145,11 +146,13 @@ CI action cannot read it. Refresh it with `extract-translation-memory.py`.
 
 ## Hardcoded copy outside text nodes
 
-`check-source.py` sees bare JSX text and nothing else, so
+`check-source.py` sees bare JSX text and nothing else: a capitalised word,
+alone or leading more, between a closing `>` and the next tag or `{`. So
 `<IconButton aria-label="Refresh" />`, `empty="No alerts match"` and
-`{loading ? 'Loading…' : n}` all pass it. `check-copy.py` scans for those two
-shapes — a copy-bearing prop value and a capitalised multi-word string literal
-outside a `t()` call — and was seed's `scripts/check-i18n-copy.py` until it was
+`{loading ? 'Loading…' : n}` all pass it. `check-copy.py` scans for those
+shapes — a copy-bearing prop value, a capitalised multi-word string literal
+outside a `t()` call, and a string of any length that a JSX child expression
+renders as written — and was seed's `scripts/check-i18n-copy.py` until it was
 promoted here.
 
 No repo was at zero when it moved, so it is a ratchet rather than a block. Each
