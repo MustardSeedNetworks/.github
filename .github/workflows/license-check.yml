@@ -118,7 +118,7 @@ jobs:
                 console.error("ui/package.json is public but has no name and version to exclude it by");
                 process.exit(1);
               }
-              console.log(`${p.name}@${p.version}`);
+              console.log(p.name + "@" + p.version);
             }
           ')
           exclude=()
