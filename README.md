@@ -15,6 +15,7 @@ The goal: make a fleet-wide change by editing **one file here**, not three repos
 | `ui/theme/msn-shared.css` | The canonical shared interface theme. Every UI repo keeps a byte-identical copy at `ui/src/theme/msn-shared.css`; `ci-conformance` compares them by sha256. See `ui/theme/README.md`. |
 | `scripts/phone-width/` | The fleet's 390×844 gate — one definition of "works at phone width", run through the reusable `phone-width.yml`. Adopted per repo, so a new rule never goes live fleet-wide unannounced. See `scripts/phone-width/README.md`. |
 | `scripts/fleet-status.py` | Writes the fleet `STATUS.md`: plans of record, open PRs, CI on main, releases, and — on the driver host — driver health and working trees. `fleet-status.yml` runs the GitHub half on dispatch. |
+| `scripts/check-release-artifacts.py` | Checks that a product's latest release published exactly the artifacts its `.github/release-artifacts.txt` declares, each with its SBOM and cosign bundle, plus checksums and provenance. `release-conformance.yml` runs it daily over the four products. |
 | `scripts/i18n/` | The fleet i18n gate — one canonical copy of the checks; each repo keeps only its own glossary, banned vocabulary and locales. See `scripts/i18n/README.md`. |
 
 ## Discipline

@@ -1,0 +1,100 @@
+# Release conformance: each product's latest release publishes exactly the
+# artifacts its `.github/release-artifacts.txt` declares, each with its SBOM
+# and cosign bundle, plus checksums and provenance (.github#103). CI checks
+# only see how a release is wired; this checks what it produced, so it needs
+# a published release and runs on a schedule rather than per PR. Daily is
+# within a day of every release.
+#
+# Token: the same msn-ci-bot App as ci-conformance-schedule.yml (read that
+# header before debugging a mint failure), scoped to the four product repos
+# with contents: read, which covers both the declaration and the release.
+# The tracking issue lives here and is written with GITHUB_TOKEN.
+
+name: Release Conformance (scheduled)
+
+on:
+  schedule:
+    - cron: '41 7 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  TRACKING_ISSUE_TITLE: "Scheduled release conformance: findings detected"
+
+jobs:
+  release-conformance:
+    name: Release conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out this repo (script source)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: MustardSeedNetworks
+          repositories: seed,stem,niac-go,trellis
+          permission-contents: read
+
+      # Every repo is checked even after one fails, so a run names them all.
+      - name: Check each product's latest release
+        id: check
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          failed=""
+          for repo in seed stem niac-go trellis; do
+            python3 scripts/check-release-artifacts.py "MustardSeedNetworks/${repo}" || failed="${failed} ${repo}"
+          done
+          failed="$(echo "${failed}" | xargs)"
+          echo "failed_repos=${failed}" >> "$GITHUB_OUTPUT"
+          if [ -n "${failed}" ]; then
+            echo "### Release conformance findings: ${failed}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Every latest release matches its declaration" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Open or update tracking issue
+        if: steps.check.outputs.failed_repos != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED_REPOS: ${{ steps.check.outputs.failed_repos }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing="$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open \
+            --search "in:title \"${TRACKING_ISSUE_TITLE}\"" \
+            --json number --jq '.[0].number')"
+
+          body="Releases that do not match their declaration this run: **${FAILED_REPOS}**
+
+          See the run log for the missing or undeclared assets: ${RUN_URL}
+
+          Either the release dropped an artifact, or the product changed what it
+          publishes without updating its \`.github/release-artifacts.txt\`. Close
+          this once a run is clean."
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "${GITHUB_REPOSITORY}" --body "$body"
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" \
+              --title "${TRACKING_ISSUE_TITLE}" \
+              --body "$body"
+          fi
+
+      - name: Fail if any release had findings
+        if: steps.check.outputs.failed_repos != ''
+        env:
+          FAILED_REPOS: ${{ steps.check.outputs.failed_repos }}
+        run: |
+          echo "::error::Release conformance findings in: ${FAILED_REPOS}"
+          exit 1
