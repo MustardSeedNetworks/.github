@@ -43,6 +43,7 @@ jobs:
           python3 scripts/i18n/test-check-source.py
           python3 scripts/i18n/test-es-fill.py
           python3 scripts/i18n/test-check-copy.py
+          python3 scripts/i18n/test-validate-interpolation.py
 
       # The conformance script gates every product repo, so a rule that
       # silently stops firing weakens all four at once. These fixtures assert

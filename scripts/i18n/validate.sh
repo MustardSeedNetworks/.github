@@ -302,12 +302,15 @@ check_interpolation_parity() {
       # Set-based parity: deduplicate vars on both sides. We care that the
       # same SET of variables is used, not how many times each one appears.
       # i18next happily resolves a single value to multiple occurrences.
+      # Both sides go through this one jq filter: jq sorts by codepoint, while
+      # `sort` collates by the caller's locale, so a shell sort on one side
+      # made {{fd}},{{fdv}} differ from itself under en_US.UTF-8 (.github#99).
+      local var_set='[scan("\\{\\{[^}]+\\}\\}")] | unique | sort | join(",")'
       en_pairs=$(jq -r '
         paths(strings) as $p
         | getpath($p) as $v
         | select($v | test("\\{\\{[^}]+\\}\\}"))
-        | [($p | join(".")),
-           ($v | [scan("\\{\\{[^}]+\\}\\}")] | unique | sort | join(","))]
+        | [($p | join(".")), ($v | '"$var_set"')]
         | @tsv
       ' "$ns_file" 2>/dev/null)
       while IFS=$'\t' read -r key en_vars; do
@@ -317,7 +320,7 @@ check_interpolation_parity() {
         local other_val other_vars
         other_val=$(jq -r --argjson p "$jq_arr" 'getpath($p) // empty' "$other" 2>/dev/null)
         [ -z "$other_val" ] && continue
-        other_vars=$(printf '%s' "$other_val" | grep -oE '\{\{[^}]+\}\}' | sort -u | tr '\n' ',' | sed 's/,$//')
+        other_vars=$(printf '%s' "$other_val" | jq -Rrs "$var_set")
         if [ "$en_vars" != "$other_vars" ]; then
           fail "$loc/$ns key '$key' interpolation drift"
           printf "      EN vars: %s\n" "$en_vars"

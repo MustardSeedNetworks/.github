@@ -20,6 +20,7 @@ Shared here — the checks themselves, which carry no product knowledge:
 | `test-check-keys.py` | self-test for the checker |
 | `test-check-source.py` | self-test for the JSX-text gate |
 | `test-check-copy.py` | self-test for the copy ratchet |
+| `test-validate-interpolation.py` | self-test for interpolation parity |
 
 Also shared, because they encode fleet policy rather than product data:
 
