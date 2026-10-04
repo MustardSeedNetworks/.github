@@ -40,6 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/i18n/test-check-keys.py
+          python3 scripts/i18n/test-check-source.py
           python3 scripts/i18n/test-es-fill.py
           python3 scripts/i18n/test-check-copy.py
 

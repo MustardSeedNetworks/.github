@@ -367,7 +367,7 @@ check_plural_completeness() {
 }
 
 # -----------------------------------------------------------------------------
-# Check: hardcoded English text in JSX (warn-only — regex is fuzzy)
+# Check: hardcoded English text in JSX (blocking, no baseline)
 # -----------------------------------------------------------------------------
 check_hardcoded_jsx() {
   section "Hardcoded English JSX text"

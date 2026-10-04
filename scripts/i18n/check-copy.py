@@ -20,6 +20,10 @@ reach:
               in a .tsx that is not the argument of a t() call. This is the
               shape a `Record<Status, string>` of labels and a thrown
               `new Error('Failed to load users')` both take.
+  child       a string a JSX child expression renders, of any length:
+              `{saving ? 'Saving…' : 'Save'}`, `{ok && 'VALID'}`. The literal
+              rule needs two words so it can skip identifiers; inside a child
+              expression a single word is on screen.
 
 Unlike check-source.py it is a RATCHET, because no repo was at zero when it was
 promoted from seed: each repo lists its existing sites in its own baseline
@@ -38,6 +42,7 @@ import importlib.util
 import os
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 # The comment blanking and the skip rules are check-source.py's, so the two
@@ -59,14 +64,26 @@ COPY_PROPS = (
     "submitLabel", "summary", "text", "title", "tooltip",
 )
 
+# The value may hold the other quote: `title="Doesn't modify the file."`.
 PROP = re.compile(
-    r"\b(" + "|".join(re.escape(p) for p in COPY_PROPS) + r")=(\"|')([^\"'{}<>\n]{2,120})\2"
+    r"\b(" + "|".join(re.escape(p) for p in COPY_PROPS)
+    + r")=(\"|')((?:(?!\2)[^{}<>\n]){2,120})\2"
 )
 # A capitalised multi-word string: "Failed to load users". The space is
 # required and the delimiters are excluded from the separator class on purpose:
 # without them "Content-Type" and the tail of `'Connecting...' : 'Connect'` both
 # read as prose, and a gate that cries wolf gets a blanket baseline entry.
-LITERAL = re.compile(r"(\"|')([A-Z][a-z]+(?:[ ,.!?:;’/-]+[^\"'\n]{1,80})+?)\1")
+# The tail may hold the other quote, so "Choose this stem's role" is one site.
+LITERAL = re.compile(r"(\"|')([A-Z][a-z]+(?:[ ,.!?:;’/-]+(?:(?!\1)[^\n]){1,80})+?)\1")
+
+# A JSX child expression: a '{' opened straight after a closing '>' (not an
+# arrow's '=>') or a sibling's '}', or after the text run that follows one.
+# A template literal's `${` is a className or a URL being built, not a child.
+CHILD_OPEN = re.compile(r"(?:(?<!=)>|\})[^<>{}=();$`]*\{")
+# A string a child expression renders as it stands: the whole expression, or a
+# branch of `? :`, `&&`, `||`, `??`. `status === 'ok'` is compared, not shown.
+LETTER = re.compile(r"[A-Za-z]")
+CHILD_LITERAL = re.compile(r"(?:^|\?|:|&&|\|\||\?\?)\s*(\"|')((?:(?!\1)[^\n\\]){1,80})\1")
 
 # A developer-facing log line, not shipped copy.
 LOG_CALL = re.compile(r"\b(?:logger|console)\.\w+\(")
@@ -95,6 +112,7 @@ def sites(src: Path, root: Path):
             if not value or EXAMPLE.match(value):
                 continue
             yield f"{rel} copy-prop {prop}={value}", rel, "copy-prop", f"{prop}={value!r}"
+        literal_starts = set()
         for match in LITERAL.finditer(text):
             value = " ".join(match.group(2).split())
             if " " not in value:
@@ -108,7 +126,36 @@ def sites(src: Path, root: Path):
             # this, but `t('Some key', …)` would still be a false positive.
             if T_CALL.search(text[max(0, match.start() - 40) : match.start()]):
                 continue
+            literal_starts.add(match.start())
             yield f"{rel} literal {value}", rel, "literal", repr(value)
+        for opener in CHILD_OPEN.finditer(text):
+            body = child_body(text, opener.end())
+            if body is None:
+                continue
+            for match in CHILD_LITERAL.finditer(body):
+                value = " ".join(match.group(2).split())
+                # A prose child is already a literal site; `{' '}` is spacing.
+                if opener.end() + match.start(1) in literal_starts or not LETTER.search(value):
+                    continue
+                yield f"{rel} child {value}", rel, "child", repr(value)
+
+
+def child_body(text: str, start: int) -> str | None:
+    """The flat body of the `{` that opens at text[start - 1].
+
+    A body with nested braces, a statement, a call, an index or a comma is a
+    function body, a `.map()` render, a lookup or an object literal, not a
+    child expression whose strings are shown as written: `Promise<void> {` and
+    `Record<Size, string> = {` both open after a '>'. So is a `key:` with no
+    `?` before it.
+    """
+    end = text.find("}", start)
+    if end < 0:
+        return None
+    body = text[start:end]
+    if any(c in body for c in "{;(,[") or (":" in body and "?" not in body):
+        return None
+    return body
 
 
 def load_baseline(path: Path) -> set[str]:
@@ -147,10 +194,10 @@ def main() -> int:
         for key in gone:
             print(f"  {key}")
 
-    props = sum(1 for _, kind, _ in found.values() if kind == "copy-prop")
+    kinds = Counter(kind for _, kind, _ in found.values())
     print(
-        f"i18n copy gate: {len(found)} hardcoded sites "
-        f"({props} copy-prop, {len(found) - props} literal), {len(baseline)} baselined."
+        f"i18n copy gate: {len(found)} hardcoded sites ({kinds['copy-prop']} copy-prop, "
+        f"{kinds['literal']} literal, {kinds['child']} child), {len(baseline)} baselined."
     )
     return 1 if new or gone else 0
 

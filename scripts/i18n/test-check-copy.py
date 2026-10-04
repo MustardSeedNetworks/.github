@@ -78,6 +78,38 @@ class FindsCopy(unittest.TestCase):
             ["ui/src/Thing.tsx literal Failed to load users"],
         )
 
+    def test_prop_value_with_an_apostrophe(self) -> None:
+        # .github#100: the value class stopped at either quote.
+        self.assertIn(
+            "ui/src/Thing.tsx copy-prop title=Reads the walk. Doesn't modify the file.",
+            keys_for('<b title="Reads the walk. Doesn\'t modify the file." />'),
+        )
+
+    def test_literal_with_an_apostrophe(self) -> None:
+        self.assertEqual(
+            keys_for('const L = { role: "Choose this stem\'s role" };'),
+            ["ui/src/Thing.tsx literal Choose this stem's role"],
+        )
+
+    def test_single_word_in_a_child_ternary(self) -> None:
+        # .github#100: LITERAL needs two words, so both branches passed.
+        self.assertEqual(
+            keys_for("<Button>{saving ? 'Saving…' : 'Save'}</Button>"),
+            ["ui/src/Thing.tsx child Save", "ui/src/Thing.tsx child Saving…"],
+        )
+
+    def test_child_after_text_and_logical_branches(self) -> None:
+        self.assertEqual(
+            keys_for("<td>State: {ok && 'VALID'}{name ?? 'Unknown'}</td>"),
+            ["ui/src/Thing.tsx child Unknown", "ui/src/Thing.tsx child VALID"],
+        )
+
+    def test_child_prose_is_reported_once(self) -> None:
+        self.assertEqual(
+            keys_for("<p>{busy ? 'Saving the rows' : 'Save'}</p>"),
+            ["ui/src/Thing.tsx child Save", "ui/src/Thing.tsx literal Saving the rows"],
+        )
+
 
 class IgnoresWhatIsNotCopy(unittest.TestCase):
     def assert_clean(self, source: str) -> None:
@@ -107,6 +139,23 @@ class IgnoresWhatIsNotCopy(unittest.TestCase):
 
     def test_class_names_and_ids(self) -> None:
         self.assert_clean('<div className="flex items-center" data-testid="thing-row" />')
+
+    def test_child_expression_that_does_not_show_its_strings(self) -> None:
+        self.assert_clean(
+            "<p>{status === 'ok' ? n : m}</p>"
+            "<p>{' '}</p>"
+            "<p>{PRESETS[preset ?? 'common'].label}</p>"
+            "<p>{rows.map((r) => r.name ?? 'Unknown')}</p>"
+            "<i className={`${base} ${on ? 'text-brand' : 'text-muted'}`} />"
+        )
+
+    def test_typescript_after_a_generic(self) -> None:
+        # Both open a '{' straight after a '>' and hold `key: 'value'`.
+        self.assert_clean(
+            "const SIZE: Record<Size, string> = { sm: 'Small', md: 'Medium' };\n"
+            "function f(): Promise<void> { const m = ok ? 'Yes' : 'No'; }\n"
+            "const g = (x: number) => { return x ? 'Yes' : 'No' }\n"
+        )
 
     def test_test_and_story_files_are_out_of_scope(self) -> None:
         tree = Tree("")
