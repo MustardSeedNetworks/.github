@@ -72,6 +72,12 @@ jobs:
       - name: Run the fleet-status tests
         run: python3 scripts/test-fleet-status.py
 
+      # The scheduled release check is the only thing that sees what a release
+      # actually published; each rule is asserted to fire on a release missing
+      # what it guards.
+      - name: Run the release-conformance tests
+        run: python3 scripts/test-check-release-artifacts.py
+
       # A syntax error in the conformance script fails every product repo's
       # ci-conformance job, so compiling it here turns that into a local failure.
       - name: Compile every policy script
