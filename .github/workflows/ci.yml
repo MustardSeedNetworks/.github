@@ -77,6 +77,26 @@ jobs:
       - name: Compile every policy script
         run: python3 -m compileall -q scripts/
 
+  # The license gate decides every product repo's npm verdict. These run the
+  # npm step's own script with the pinned checker against fixture trees: a
+  # public package must not fail on itself, and excluding it must not let a
+  # third-party BUSL or GPL dependency through (.github#98).
+  license-check-npm:
+    name: License Gate Fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "26.10.0"
+
+      - name: Run the npm license gate fixtures
+        run: python3 scripts/test-license-check-npm.py
+
   renovate-config:
     name: Renovate preset
     runs-on: ubuntu-latest
@@ -290,6 +310,7 @@ jobs:
     timeout-minutes: 5
     needs:
       - python
+      - license-check-npm
       - renovate-config
       - workflow-lint
       - phone-width
