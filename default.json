@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest after a short soak: updates are raised once a release is seven days old, and everything below a major auto-merges when CI is green. Security updates skip the soak entirely.",
+  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest after a short soak: updates are raised once a release is seven days old, and everything below a major auto-merges when CI is green. Security updates skip the soak entirely. A PR that falls behind main is rebased (`rebaseWhen: behind-base-branch`): the product repos run merge queues, which do not require an up-to-date branch, so the default only rebased on a conflict and a stale branch kept failing gates main had already fixed (npm audit on a pre-fix lockfile).",
   "extends": [
     "config:best-practices",
     ":semanticCommits",
@@ -16,6 +16,7 @@
   "minimumReleaseAge": "7 days",
   "prConcurrentLimit": 10,
   "prHourlyLimit": 0,
+  "rebaseWhen": "behind-base-branch",
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
