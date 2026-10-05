@@ -85,12 +85,12 @@ def run(name: str, conclusion: str | None, status: str = "completed") -> dict:
     return {"name": name, "status": status, "conclusion": conclusion}
 
 
-def pr(number: int, *, armed: bool = False, draft: bool = False) -> dict:
+def pr(number: int, *, armed: bool = False, draft: bool = False, created: str = "2026-09-23T12:00:00+00:00") -> dict:
     return {
         "number": number,
         "title": "fix: a | pipe",
         "user": {"login": "renovate[bot]"},
-        "created_at": "2026-09-23T12:00:00+00:00",
+        "created_at": created,
         "auto_merge": {"merge_method": "squash"} if armed else None,
         "draft": draft,
     }
@@ -140,6 +140,23 @@ class GitHubTests(unittest.TestCase):
         self.assertIn("| good | #8 |", page)
         self.assertTrue(any(line.startswith("| good | #8 ") and line.endswith("| no |") for line in page.splitlines()))
         self.assertTrue(any(line.startswith("| good | #9 ") and line.endswith("| draft |") for line in page.splitlines()))
+
+    def test_stuck_lists_old_armed_and_long_unarmed_prs_only(self) -> None:
+        pulls = [
+            pr(1, armed=True),  # 3 d armed: stuck
+            pr(2, armed=True, created="2026-09-25T12:00:00+00:00"),  # 24 h armed: fine
+            pr(3),  # 3 d unarmed: still waiting on a human, not stuck yet
+            pr(4, created="2026-09-18T12:00:00+00:00"),  # 8 d unarmed: stuck
+            pr(5, draft=True, created="2026-09-01T12:00:00+00:00"),  # draft: never stuck
+        ]
+        page = fs.github_sections(fake_api(repo_responses("o/a", [run("CI", "success")], pulls)), ["o/a"], NOW)
+        stuck = page[: page.index("## Repositories")]
+        numbers = [line.split("|")[2].strip() for line in stuck if line.startswith("| a |")]
+        self.assertEqual(numbers, ["#1", "#4"])
+
+    def test_nothing_stuck_says_none(self) -> None:
+        page = fs.github_sections(fake_api(repo_responses("o/a", [run("CI", "success")], [pr(2, armed=True, created="2026-09-26T10:00:00+00:00")])), ["o/a"], NOW)
+        self.assertEqual(page[: page.index("## Repositories")][-2], "None.")
 
 
 class DriverTests(unittest.TestCase):
@@ -195,7 +212,7 @@ class RenderTests(unittest.TestCase):
         page = fs.render(args, fake_api(repo_responses("o/a", [run("CI", "success")])), NOW)
         headings = [line for line in page.splitlines() if line.startswith("## ")]
         self.assertEqual(
-            headings, ["## Driver health", "## Repositories", "## Open pull requests", "## Plans", "## Working trees"]
+            headings, ["## Driver health", "## Stuck pull requests", "## Repositories", "## Open pull requests", "## Plans", "## Working trees"]
         )
 
 

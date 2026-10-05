@@ -8,6 +8,7 @@ and nothing put the two side by side. This reads both and writes one page.
 GitHub sections (every run):
 
     repositories    CI on main's head commit, latest release, commits since it
+    stuck PRs       open PRs that should have merged by now (see STUCK_*)
     pull requests   every open PR with its age and whether auto-merge is armed
     plans           row counts per plan of record, and every row still moving
 
@@ -60,6 +61,12 @@ PLAN_GLOB = "*plan.md"
 INDEX_HEADER = "| ID / entry | State | Details |"
 # States that need nobody: listed as counts only.
 SETTLED = {"DONE", "SUPERSEDED", "WITHDRAWN", "TODO", "DETAILS"}
+# An armed PR lands within hours once CI is green, so one still open after two
+# days is red or wedged. Renovate PRs sat like that for two days in October
+# 2026 with nothing reporting them (.github#107). An unarmed PR is waiting on a
+# human, and a week is long enough to say so.
+STUCK_ARMED_HOURS = 48
+STUCK_UNARMED_HOURS = 7 * 24
 RED = {"failure", "cancelled", "timed_out", "action_required", "startup_failure"}
 
 Api = Callable[[str], object]
@@ -81,8 +88,12 @@ def cell(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
+def hours_since(stamp: str, now: datetime) -> float:
+    return (now - datetime.fromisoformat(stamp)).total_seconds() / 3600
+
+
 def age(stamp: str, now: datetime) -> str:
-    hours = (now - datetime.fromisoformat(stamp)).total_seconds() / 3600
+    hours = hours_since(stamp, now)
     return f"{hours:.0f} h" if hours < 48 else f"{hours / 24:.0f} d"
 
 
@@ -182,6 +193,7 @@ def github_sections(api: Api, repos: list[str], now: datetime) -> list[str]:
         "| Repo | PR | Title | Author | Age | Auto-merge |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
+    stuck: list[str] = []
     for repo in repos:
         name = repo.split("/", 1)[1]
         try:
@@ -193,11 +205,25 @@ def github_sections(api: Api, repos: list[str], now: datetime) -> list[str]:
         summary.append(f"| {name} | {cell(main_ci(api, repo))} | {cell(tag)} | {cell(ahead)} | {cell(count)} |")
         for pr in pulls:
             armed = "armed" if pr["auto_merge"] else ("draft" if pr["draft"] else "no")
-            prs.append(
+            line = (
                 f"| {name} | #{pr['number']} | {cell(pr['title'])} | {pr['user']['login']} "
                 f"| {age(pr['created_at'], now)} | {armed} |"
             )
-    return [*summary, "", *prs, ""]
+            prs.append(line)
+            limit = STUCK_ARMED_HOURS if pr["auto_merge"] else STUCK_UNARMED_HOURS
+            if not pr["draft"] and hours_since(pr["created_at"], now) > limit:
+                stuck.append(line)
+    stuck_section = [
+        "## Stuck pull requests",
+        "",
+        f"Armed and open over {STUCK_ARMED_HOURS} h, or unarmed and open over {STUCK_UNARMED_HOURS // 24} d.",
+        "",
+    ]
+    if stuck:
+        stuck_section += [prs[4], prs[5], *stuck]
+    else:
+        stuck_section.append("None.")
+    return [*stuck_section, "", *summary, "", *prs, ""]
 
 
 def driver_section(state_file: Path | None, now: datetime) -> list[str]:
