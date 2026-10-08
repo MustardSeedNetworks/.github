@@ -9,6 +9,7 @@ regression each one guards is .github#74: a pair nobody measured.
 from __future__ import annotations
 
 import importlib.util
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -199,6 +200,14 @@ class Canonical(unittest.TestCase):
         for mode in ("light", "dark"):
             for hue in ("success", "warning", "error", "info"):
                 self.assertIn(f"status-{hue}-strong", pal[mode], mode)
+
+    def test_each_mode_sets_its_native_color_scheme(self) -> None:
+        """Browsers paint native selects and scrollbars from color-scheme, so
+        a dark theme without it drew light select faces (seed#3202)."""
+        css = (REPO / "ui/theme/msn-shared.css").read_text(encoding="utf-8")
+        for selector, scheme in ((r":root", "light"), (r"\.dark", "dark")):
+            (body,) = re.findall(rf"(?:^|\n){selector}\s*\{{(.*?)\n\}}", css, re.S)
+            self.assertRegex(body, rf"\n\s*color-scheme:\s*{scheme};", selector)
 
 
 if __name__ == "__main__":
