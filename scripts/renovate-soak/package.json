@@ -5,7 +5,7 @@
   "description": "Resolves default.json's preset chain so the fleet's npm soak can be asserted. Self-contained, and pinned by a lockfile so the resolver Renovate's own presets are read with never drifts from the validator's.",
   "type": "module",
   "engines": {
-    "node": "26.10.0",
+    "node": "26.11.1",
     "npm": "12.2.0"
   },
   "packageManager": "npm@12.2.0",
