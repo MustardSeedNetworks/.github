@@ -1,4 +1,5 @@
-# Fleet STATUS.md from GitHub alone: plans, open PRs, CI on main, releases.
+# Fleet STATUS.md from GitHub alone: plans, open PRs, CI on main, releases,
+# and the CI load (failed runs per day, CI share of the week's finished rows).
 #
 # One dispatch writes the page (job summary + `fleet-status` artifact). The
 # driver host's daily digest (driver-host-migration D8) runs the script itself
@@ -57,6 +58,9 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
           path: plans
+          # The CI load section diffs the plans against their state a week
+          # ago, so it needs the history, not just the tip.
+          fetch-depth: 0
 
       - name: Write STATUS.md
         env:
