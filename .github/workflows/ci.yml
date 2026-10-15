@@ -100,7 +100,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "26.10.0"
+          node-version: "26.11.1"
 
       - name: Run the npm license gate fixtures
         run: python3 scripts/test-license-check-npm.py
@@ -119,7 +119,7 @@ jobs:
       # fleet's Node version rather than taking whatever the runner ships.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "26.10.0"
+          node-version: "26.11.1"
 
       # One install serves both steps below: the validator binary and the
       # preset resolver the soak gate imports. It is a lockfile install, like
@@ -218,7 +218,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "26.10.0"
+          node-version: "26.11.1"
 
       - name: Install the phone-width driver
         working-directory: scripts/phone-width
