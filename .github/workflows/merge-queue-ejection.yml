@@ -1,0 +1,157 @@
+# Fleet-shared stop for the merge-queue re-entry loop (support plan G-17).
+#
+# A PR ejected from the merge queue for failed checks goes straight back in:
+# its auto-merge stays armed, and Renovate's `rebaseWhen: behind-base-branch`
+# pushes a new head after every main commit and re-arms it. Nothing in that
+# loop asks whether the failure was deterministic. trellis#731 was ejected 294
+# times and #756 203 times between 2026-10-07 and 10-14, 527 of trellis's 671
+# merge-group CI runs (artifacts/ci-load-2026-10-15 in the plans repo). Gating
+# re-entry on a green `pull_request` run would not have stopped it: #731's PR
+# runs were green every time, because the job that failed only ran in the
+# merge group.
+#
+# So this counts the ejections instead. The first `failed_checks` removal is
+# left alone, which absorbs a flake. On the second, the PR is taken out of the
+# queue and its auto-merge is disabled; a Renovate PR also gets Renovate's
+# `stop-updating` label, without which Renovate's next rebase re-arms it
+# (Renovate 44 skips a labelled branch before it touches the PR at all).
+# A comment carrying MARKER records the stop, and the count restarts after it,
+# so a PR someone fixes and re-arms gets the same one retry again.
+#
+# Call it from a workflow of its own in each product repo:
+#
+#   on:
+#     pull_request:
+#       types: [dequeued]
+#   permissions: {}
+#   jobs:
+#     merge-queue-ejection:
+#       permissions:
+#         issues: write
+#         pull-requests: write
+#       uses: MustardSeedNetworks/.github/.github/workflows/merge-queue-ejection.yml@<sha> # vX.Y.Z
+name: Merge Queue Ejection (reusable)
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  merge-queue-ejection:
+    name: Merge Queue Ejection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Dequeue and disarm the PR; labels and comments go through the issues API.
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Stop a PR that keeps failing in the merge queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          gh api graphql --paginate \
+            -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$PR" \
+            -f query='
+              query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $number) {
+                    timelineItems(first: 100, after: $endCursor,
+                                  itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT, ISSUE_COMMENT]) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        __typename
+                        ... on RemovedFromMergeQueueEvent { createdAt reason }
+                        ... on IssueComment { createdAt body author { login } }
+                      }
+                    }
+                  }
+                }
+              }' \
+            --jq '.data.repository.pullRequest.timelineItems.nodes[]' > timeline.jsonl
+
+          gh api graphql \
+            -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$PR" \
+            -f query='
+              query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $number) {
+                    id isInMergeQueue autoMergeRequest { enabledAt } author { login }
+                  }
+                }
+              }' \
+            --jq '.data.repository.pullRequest' > pr.json
+
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          LIMIT = 2
+          LABEL = "stop-updating"
+          MARKER = "<!-- merge-queue-ejection -->"
+          ACTIONS_BOT = {"github-actions", "github-actions[bot]"}
+          RENOVATE = {"renovate", "renovate[bot]"}
+
+          repo, number = os.environ["REPO"], os.environ["PR"]
+
+          with open("timeline.jsonl") as fh:
+              items = sorted((json.loads(line) for line in fh if line.strip()),
+                             key=lambda item: item["createdAt"])
+          with open("pr.json") as fh:
+              pr = json.load(fh)
+
+          failed = 0
+          for item in items:
+              if item["__typename"] == "IssueComment":
+                  if (item["author"] or {}).get("login") in ACTIONS_BOT and MARKER in item["body"]:
+                      failed = 0
+              elif item["reason"] == "failed_checks":
+                  failed += 1
+
+          print(f"#{number}: {failed} failed-checks ejection(s) since the last stop; the limit is {LIMIT}")
+          if failed < LIMIT:
+              raise SystemExit(0)
+
+
+          def gh(*args: str) -> None:
+              subprocess.run(["gh", *args], check=True)
+
+
+          def mutate(mutation: str) -> None:
+              gh("api", "graphql", "-F", f"id={pr['id']}",
+                 "-f", f"query=mutation($id: ID!) {{ {mutation} }}")
+
+
+          # GitHub can re-queue an armed PR within a minute of ejecting it, so
+          # it may already be back in by the time this runs.
+          if pr["isInMergeQueue"]:
+              mutate("dequeuePullRequest(input: {id: $id}) { clientMutationId }")
+          if pr["autoMergeRequest"]:
+              mutate("disablePullRequestAutoMerge(input: {pullRequestId: $id}) { clientMutationId }")
+
+          renovate = pr["author"]["login"] in RENOVATE
+          if renovate:
+              gh("label", "create", LABEL, "--repo", repo, "--force", "--color", "B60205",
+                 "--description", "Renovate does not rebase or re-arm this PR")
+              gh("pr", "edit", number, "--repo", repo, "--add-label", LABEL)
+
+          rearm = "re-arm it with `gh pr merge --auto`."
+          if renovate:
+              rearm = (f"remove `{LABEL}`, which stops Renovate rebasing and re-arming it, "
+                       f"and {rearm}")
+          body = (
+              f"{MARKER}\n"
+              f"Ejected from the merge queue for failed checks {failed} times, so auto-merge "
+              "is off and this PR stays out of the queue. A green pull_request run does not "
+              "clear it: fix the job that failed in the merge group. Once the fix is pushed, "
+              f"{rearm}"
+          )
+          gh("pr", "comment", number, "--repo", repo, "--body", body)
+          print(f"#{number}: stopped (renovate={renovate})")
+          PY
