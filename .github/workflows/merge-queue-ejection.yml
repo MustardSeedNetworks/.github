@@ -55,9 +55,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          gh api graphql --paginate \
-            -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$PR" \
-            -f query='
+          # Quoted heredocs keep the GraphQL $variables literal for gh.
+          timeline_query=$(cat <<'GQL'
               query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
                 repository(owner: $owner, name: $name) {
                   pullRequest(number: $number) {
@@ -72,19 +71,28 @@ jobs:
                     }
                   }
                 }
-              }' \
-            --jq '.data.repository.pullRequest.timelineItems.nodes[]' > timeline.jsonl
-
-          gh api graphql \
-            -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$PR" \
-            -f query='
+              }
+          GQL
+          )
+          pr_query=$(cat <<'GQL'
               query($owner: String!, $name: String!, $number: Int!) {
                 repository(owner: $owner, name: $name) {
                   pullRequest(number: $number) {
                     id isInMergeQueue autoMergeRequest { enabledAt } author { login }
                   }
                 }
-              }' \
+              }
+          GQL
+          )
+
+          gh api graphql --paginate \
+            -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$PR" \
+            -f query="$timeline_query" \
+            --jq '.data.repository.pullRequest.timelineItems.nodes[]' > timeline.jsonl
+
+          gh api graphql \
+            -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$PR" \
+            -f query="$pr_query" \
             --jq '.data.repository.pullRequest' > pr.json
 
           python3 - <<'PY'
