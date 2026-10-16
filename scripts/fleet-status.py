@@ -461,7 +461,13 @@ def worktrees_section(api: Api, roots: list[Path]) -> list[str]:
     out += ["| Path | Branch | Dirty files | PR |", "| --- | --- | --- | --- |"]
     for root in roots:
         for path in sorted(p for p in root.iterdir() if (p / ".git").exists()):
-            branch = git(path, "branch", "--show-current") or "(detached)"
+            # A worktree whose main repository pruned or lost it still has its
+            # .git file; name it so the owner can clean it up, and keep going.
+            try:
+                branch = git(path, "branch", "--show-current") or "(detached)"
+            except subprocess.CalledProcessError:
+                out.append(f"| {path} | ? | ? | broken: not a git repository |")
+                continue
             dirty = len(git(path, "status", "--porcelain").splitlines())
             out.append(f"| {path} | {cell(branch)} | {dirty} | {cell(merged(api, path, branch))} |")
     return [*out, ""]
