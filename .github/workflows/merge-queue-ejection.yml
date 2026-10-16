@@ -1,9 +1,12 @@
 # Fleet-shared stop for the merge-queue re-entry loop (support plan G-17).
 #
 # A PR ejected from the merge queue for failed checks goes straight back in:
-# its auto-merge stays armed, and Renovate's `rebaseWhen: behind-base-branch`
-# pushes a new head after every main commit and re-arms it. Nothing in that
-# loop asks whether the failure was deterministic. trellis#731 was ejected 294
+# its auto-merge stays armed, and a new commit on the PR re-arms it. The fleet
+# used to rebase every Renovate PR on every main commit
+# (`rebaseWhen: behind-base-branch`), which pushed that commit after every
+# merge; policy is now `conflicted`, and a conflict rebase or a human push can
+# still re-arm it. Nothing in that loop asks whether the failure was
+# deterministic. trellis#731 was ejected 294
 # times and #756 203 times between 2026-10-07 and 10-14, 527 of trellis's 671
 # merge-group CI runs (artifacts/ci-load-2026-10-15 in the plans repo). Gating
 # re-entry on a green `pull_request` run would not have stopped it: #731's PR

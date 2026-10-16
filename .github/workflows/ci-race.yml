@@ -1,0 +1,118 @@
+# Fleet-shared race-detector job, modeled on seed's ci.yml.
+#
+# The race detector moved out of the pre-commit hook because the hook only ran
+# short tests, and the races worth catching are on the paths `-short` skips.
+# Callers that need a built UI pass the artifact name the build job uploaded.
+#
+#   race:
+#     needs: [changes, build-ui]
+#     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci_infra == 'true'
+#     permissions:
+#       contents: read
+#       actions: read
+#     uses: MustardSeedNetworks/.github/.github/workflows/ci-race.yml@<sha> # pin to a commit (Renovate bumps it)
+#     with:
+#       install-libpcap: true
+#       ui-artifact: frontend-dist
+#       test-command: go test -race ./...
+name: CI Race (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        description: When false, the job is skipped.
+        type: boolean
+        required: false
+        default: true
+      go-version-file:
+        description: File setup-go reads the toolchain from.
+        type: string
+        required: false
+        default: go.mod
+      install-libpcap:
+        description: Install libpcap-dev before the race tests.
+        type: boolean
+        required: false
+        default: true
+      ui-artifact:
+        description: Artifact name of the built UI to download. Empty skips the download.
+        type: string
+        required: false
+        default: ""
+      ui-artifact-path:
+        description: Directory the UI artifact is extracted into.
+        type: string
+        required: false
+        default: internal/api/ui
+      pre-command:
+        description: Command run at the repo root after setup and before the tests. Empty skips it.
+        type: string
+        required: false
+        default: ""
+      test-command:
+        description: Race-detector command. No `-short`; the detector is most useful on the paths -short skips.
+        type: string
+        required: false
+        default: go test -race ./...
+      skip-network-tests:
+        description: Export SKIP_NETWORK_TESTS=1 for the test command.
+        type: boolean
+        required: false
+        default: true
+      timeout-minutes:
+        description: Job timeout.
+        type: number
+        required: false
+        default: 20
+
+permissions: {}
+
+jobs:
+  race:
+    name: Backend (race detector)
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    if: ${{ inputs.enabled }}
+    permissions:
+      contents: read
+      actions: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+          cache: false
+
+      - name: Install libpcap-dev
+        if: ${{ inputs.install-libpcap }}
+        uses: ./.github/actions/apt-install
+        timeout-minutes: 10
+        with:
+          packages: libpcap-dev
+
+      - name: Download built UI assets
+        if: ${{ inputs.ui-artifact != '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.ui-artifact }}
+          path: ${{ inputs.ui-artifact-path }}
+
+      - name: Pre-test setup
+        if: ${{ inputs.pre-command != '' }}
+        env:
+          PRE_COMMAND: ${{ inputs.pre-command }}
+        run: sh -euc "$PRE_COMMAND"
+
+      - name: Run tests with race detector
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+          SKIP_NETWORK_TESTS: ${{ inputs.skip-network-tests && '1' || '' }}
+        run: sh -euc "$TEST_COMMAND"
