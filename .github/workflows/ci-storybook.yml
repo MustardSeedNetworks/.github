@@ -5,7 +5,10 @@
 # bundling the two left the apt half with no step budget and no dpkg lock
 # bound: seed lost a whole job budget that way on 2026-08-18 (run
 # 32161702107) and ejected a release PR from the merge queue. The apt half
-# goes through the shared apt-install action, which bounds the wait.
+# goes through the shared apt-install action, which bounds the wait. That
+# action is pinned to this repository by SHA. A relative `uses: ./` inside a
+# called workflow is resolved in the caller, so a product repo would otherwise
+# have to vendor it (stem#1792).
 #
 #   storybook:
 #     needs: changes
@@ -110,7 +113,7 @@ jobs:
         run: sh -euc "$INSTALL_COMMAND"
 
       - name: Install Chromium OS dependencies
-        uses: ./.github/actions/apt-install
+        uses: MustardSeedNetworks/.github/.github/actions/apt-install@0bc6492eca8eee28f85af11187fd54b28bd85fe0 # 0bc6492
         timeout-minutes: 10
         with:
           # `packages` is required by the action even though `command` ignores
