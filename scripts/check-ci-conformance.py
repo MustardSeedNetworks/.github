@@ -219,12 +219,15 @@ def shared_theme(root: Path, repo_root: Path) -> list[str]:
     would let the comments explaining WHY a value is what it is drift apart,
     and those comments are the only record of the measurements behind them.
 
-    A repo with no ui/src is a backend-only repo and is not in scope.
+    Only a repo whose ui/src ships a stylesheet is in scope. A backend-only
+    repo has no ui/src, and foundation's ui/src is a TypeScript contracts
+    package that renders nothing, so neither has colours that could drift.
     """
     canonical = repo_root / "ui/theme/msn-shared.css"
     if not canonical.exists():
         return []
-    if not (root / "ui/src").is_dir():
+    ui = root / "ui/src"
+    if not ui.is_dir() or not any(ui.rglob("*.css")):
         return []
     copy = root / "ui/src/theme/msn-shared.css"
     if not copy.exists():

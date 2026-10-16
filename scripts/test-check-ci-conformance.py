@@ -69,6 +69,7 @@ jobs:
 class ConformanceChecks(unittest.TestCase):
     def run_checker(self, ci: str, status_definitions: str = "",
                     theme: str | None = None,
+                    stylesheet: str | None = None,
                     locales_alias: str | None = None,
                     locales_dir: str = "internal/i18n/locales") -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,6 +90,9 @@ class ConformanceChecks(unittest.TestCase):
             if theme is not None:
                 (root / "ui/src/theme").mkdir(parents=True, exist_ok=True)
                 (root / "ui/src/theme/msn-shared.css").write_text(theme)
+            if stylesheet is not None:
+                (root / "ui/src").mkdir(parents=True, exist_ok=True)
+                (root / "ui/src/index.css").write_text(stylesheet)
             if locales_alias is not None:
                 (root / "ui").mkdir(parents=True, exist_ok=True)
                 (root / "ui/vite.config.ts").write_text(
@@ -239,12 +243,17 @@ class ConformanceChecks(unittest.TestCase):
         self.assertIn("has drifted from the canonical theme", out)
 
     def test_missing_theme_in_a_ui_repo_is_rejected(self) -> None:
-        code, out = self.run_checker(GOOD_CI, status_definitions="// ui repo\n")
+        code, out = self.run_checker(GOOD_CI, stylesheet="body { margin: 0; }\n")
         self.assertNotEqual(code, 0, out)
         self.assertIn("ui/src/theme/msn-shared.css is missing", out)
 
     def test_backend_only_repo_is_out_of_scope(self) -> None:
         _, out = self.run_checker(GOOD_CI)
+        self.assertNotIn("msn-shared.css", out)
+
+    def test_ui_package_without_stylesheets_is_out_of_scope(self) -> None:
+        """foundation's ui/src is TypeScript contracts only (F-2)."""
+        _, out = self.run_checker(GOOD_CI, status_definitions="// contracts\n")
         self.assertNotIn("msn-shared.css", out)
 
 
