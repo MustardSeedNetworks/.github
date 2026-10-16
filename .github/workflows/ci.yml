@@ -80,6 +80,11 @@ jobs:
       - name: Run the release-conformance tests
         run: python3 scripts/test-check-release-artifacts.py
 
+      # The merge-queue stop runs in four repos on every ejection; each case
+      # runs its real step against a fixture timeline.
+      - name: Run the merge-queue ejection tests
+        run: python3 scripts/test-merge-queue-ejection.py
+
       # A syntax error in the conformance script fails every product repo's
       # ci-conformance job, so compiling it here turns that into a local failure.
       - name: Compile every policy script
