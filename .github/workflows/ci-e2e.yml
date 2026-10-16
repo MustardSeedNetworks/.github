@@ -109,7 +109,7 @@ on:
         description: npm installed globally after setup-node. The fleet pin.
         type: string
         required: false
-        default: "12.1.0"
+        default: "12.2.0"
       ui-artifact:
         description: Built UI artifact to download. Empty skips the download.
         type: string
