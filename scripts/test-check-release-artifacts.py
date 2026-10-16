@@ -106,6 +106,12 @@ class ReleaseConformance(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("is not a primary artifact", findings[0])
 
+    def test_a_declared_macos_installer_passes(self) -> None:
+        declaration = DECLARATION + "seed-{version}-darwin-arm64.pkg\n"
+        pkg = "seed-0.222.0-darwin-arm64.pkg"
+        assets = release_assets() + [pkg, pkg + ".cosign.bundle", pkg + ".sbom.json", pkg + ".sbom.json.cosign.bundle"]
+        self.assertEqual(checker.check(declaration, "v0.222.0", assets), [])
+
     def test_an_empty_declaration_is_rejected(self) -> None:
         findings = checker.check("# nothing yet\n", "v0.222.0", release_assets())
         self.assertIn(".github/release-artifacts.txt declares no artifacts", findings)
