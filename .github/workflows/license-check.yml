@@ -63,7 +63,7 @@ jobs:
       # four repos' verdicts with no PR anywhere (.github#67). Renovate's
       # `go install` custom manager bumps this line.
       - name: Install Go license checker
-        run: go install github.com/google/go-licenses@v1.6.0
+        run: go install github.com/google/go-licenses@v2.0.1
 
       - name: Check Go dependencies for license compliance
         # Allowed: MIT, Apache-2.0, BSD-*, ISC, MPL-2.0, CC0-1.0
