@@ -189,8 +189,18 @@ class ReusableWorkflows(unittest.TestCase):
             self.assertIn("\npermissions: {}\n", text, name)
             self.assertEqual(workflow_inputs(text), want, name)
 
-    def test_actions_are_sha_pinned_or_local(self) -> None:
+    def test_actions_are_sha_pinned_in_this_repo(self) -> None:
+        """A relative uses: ./ in a called workflow resolves in the caller.
+
+        stem#1792 had to copy apt-install and flake-budget for that reason.
+        The shared workflows pin the copies that live here.
+        """
+        shared = re.compile(
+            r"^MustardSeedNetworks/\.github/\.github/actions/(?P<action>[a-z0-9-]+)@(?P<sha>[0-9a-f]{40})$"
+        )
+        needs_apt = {"ci-backend.yml", "ci-race.yml", "ci-storybook.yml", "ci-e2e.yml"}
         for name in NEW:
+            actions = set()
             for lineno, line in enumerate((WORKFLOWS / name).read_text().splitlines(), 1):
                 if line.lstrip().startswith("#"):
                     continue
@@ -198,13 +208,22 @@ class ReusableWorkflows(unittest.TestCase):
                 if not match:
                     continue
                 ref = match.group("ref")
-                if ref.startswith("./"):
-                    continue
+                self.assertFalse(
+                    ref.startswith("./"),
+                    f"{name}:{lineno}: {ref} resolves in the caller",
+                )
                 _, _, version = ref.partition("@")
                 self.assertTrue(
                     SHA.match(version),
                     f"{name}:{lineno}: {ref} is not a 40-hex pin",
                 )
+                shared_match = shared.match(ref)
+                if shared_match:
+                    actions.add(shared_match.group("action"))
+            if name in needs_apt:
+                self.assertIn("apt-install", actions, name)
+            if name == "ci-e2e.yml":
+                self.assertIn("flake-budget", actions, name)
 
     def test_no_job_or_step_uses_always(self) -> None:
         """always() is how a cancelled run posted a red CI Complete."""

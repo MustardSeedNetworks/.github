@@ -20,6 +20,10 @@
 # does not fail the caller. Name the caller `backend` and put that one job in
 # ci-complete's needs.
 #
+# apt-install is pinned to this repository by SHA. A relative `uses: ./` inside
+# a called workflow is resolved in the caller, so a product repo would otherwise
+# have to vendor the action (stem#1792).
+#
 #   backend:
 #     needs: changes
 #     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.ci_infra == 'true'
@@ -238,7 +242,7 @@ jobs:
 
       - name: Install libpcap-dev
         if: ${{ inputs.install-libpcap }}
-        uses: ./.github/actions/apt-install
+        uses: MustardSeedNetworks/.github/.github/actions/apt-install@0bc6492eca8eee28f85af11187fd54b28bd85fe0 # 0bc6492
         timeout-minutes: 10
         with:
           packages: libpcap-dev

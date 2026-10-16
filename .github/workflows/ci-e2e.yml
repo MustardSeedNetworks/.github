@@ -20,6 +20,10 @@
 # aggregator's check, not each shard: a reshard would otherwise retarget every
 # required context.
 #
+# apt-install and flake-budget are pinned to this repository by SHA. A relative
+# `uses: ./` inside a called workflow is resolved in the caller, so a product
+# repo would otherwise have to vendor both actions (stem#1792).
+#
 #   e2e:
 #     needs: [backend, frontend]
 #     if: ${{ !cancelled() }}
@@ -273,7 +277,7 @@ jobs:
 
       - name: Install libpcap build tools
         if: ${{ inputs.static-libpcap }}
-        uses: ./.github/actions/apt-install
+        uses: MustardSeedNetworks/.github/.github/actions/apt-install@0bc6492eca8eee28f85af11187fd54b28bd85fe0 # 0bc6492
         timeout-minutes: 10
         with:
           packages: flex bison
@@ -444,7 +448,7 @@ jobs:
 
       - name: Enforce flake budget
         if: ${{ !cancelled() }}
-        uses: ./.github/actions/flake-budget
+        uses: MustardSeedNetworks/.github/.github/actions/flake-budget@0bc6492eca8eee28f85af11187fd54b28bd85fe0 # 0bc6492
         with:
           report: ${{ inputs.flake-report }}
           budget: ${{ inputs.flake-budget }}
@@ -566,7 +570,7 @@ jobs:
 
       - name: Enforce flake budget
         if: ${{ !cancelled() }}
-        uses: ./.github/actions/flake-budget
+        uses: MustardSeedNetworks/.github/.github/actions/flake-budget@0bc6492eca8eee28f85af11187fd54b28bd85fe0 # 0bc6492
         with:
           report: ${{ inputs.flake-report }}
           budget: ${{ inputs.flake-budget }}
