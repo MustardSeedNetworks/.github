@@ -1,0 +1,146 @@
+# Fleet-shared frontend job, modeled on seed's ci.yml.
+#
+# Types, Biome, and the coverage-gated unit suite. The production build stays
+# in the caller's build-ui job so backend, race, and e2e share one artifact
+# instead of compiling the UI again here.
+#
+# Node comes from `node-version-file` (default .nvmrc). There is no
+# `node-version:` literal in this file: a second pin is how the composites
+# drifted from the manifest.
+#
+#   frontend:
+#     needs: changes
+#     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci_infra == 'true'
+#     permissions:
+#       contents: read
+#     uses: MustardSeedNetworks/.github/.github/workflows/ci-frontend.yml@<sha> # pin to a commit (Renovate bumps it)
+#     with:
+#       extra-command: ../scripts/check-token-discipline.sh
+name: CI Frontend (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        description: When false, the job is skipped.
+        type: boolean
+        required: false
+        default: true
+      ui-dir:
+        description: Directory the UI commands run in.
+        type: string
+        required: false
+        default: ui
+      node-version-file:
+        description: File setup-node reads the Node version from.
+        type: string
+        required: false
+        default: .nvmrc
+      npm-version:
+        description: npm installed globally after setup-node. The fleet pin.
+        type: string
+        required: false
+        default: "12.1.0"
+      install-command:
+        description: Dependency install. Runs in ui-dir.
+        type: string
+        required: false
+        default: npm ci
+      check-lockfile:
+        description: Fail when the install rewrites package-lock.json.
+        type: boolean
+        required: false
+        default: true
+      typecheck-command:
+        description: >-
+          TypeScript check. `--build`, not a bare `--noEmit`: the bare form
+          checks only the app project, so a type error in the test project
+          reached main green (seed#2610). Empty skips it.
+        type: string
+        required: false
+        default: npx tsc --build --noEmit
+      lint-command:
+        description: Biome lint and format. Empty skips it.
+        type: string
+        required: false
+        default: npm run lint
+      test-command:
+        description: >-
+          Unit tests. `test:coverage`, not `test`: the thresholds in
+          vitest.config.ts are not evaluated unless coverage is on. Empty skips it.
+        type: string
+        required: false
+        default: npm run test:coverage
+      extra-command:
+        description: Product gates, run in ui-dir after lint and before tests. Empty skips them.
+        type: string
+        required: false
+        default: ""
+      timeout-minutes:
+        description: Job timeout.
+        type: number
+        required: false
+        default: 15
+
+permissions: {}
+
+jobs:
+  frontend:
+    name: Frontend (React/TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    if: ${{ inputs.enabled }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.ui-dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          package-manager-cache: false
+
+      - name: Install npm
+        env:
+          NPM_VERSION: ${{ inputs.npm-version }}
+        run: npm install -g "npm@${NPM_VERSION}"
+
+      - name: Install dependencies
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+        run: sh -euc "$INSTALL_COMMAND"
+
+      - name: Verify package-lock integrity
+        if: ${{ inputs.check-lockfile }}
+        run: git diff --exit-code package-lock.json
+
+      - name: Run TypeScript check
+        if: ${{ inputs.typecheck-command != '' }}
+        env:
+          TYPECHECK_COMMAND: ${{ inputs.typecheck-command }}
+        run: sh -euc "$TYPECHECK_COMMAND"
+
+      - name: Run Biome (lint + format)
+        if: ${{ inputs.lint-command != '' }}
+        env:
+          LINT_COMMAND: ${{ inputs.lint-command }}
+        run: sh -euc "$LINT_COMMAND"
+
+      - name: Product gates
+        if: ${{ inputs.extra-command != '' }}
+        env:
+          EXTRA_COMMAND: ${{ inputs.extra-command }}
+        run: sh -euc "$EXTRA_COMMAND"
+
+      - name: Run unit tests with coverage thresholds
+        if: ${{ inputs.test-command != '' }}
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: sh -euc "$TEST_COMMAND"

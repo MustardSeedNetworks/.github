@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest after a short soak: updates are raised once a release is seven days old, and everything below a major auto-merges when CI is green. Security updates skip the soak entirely. A PR that falls behind main is rebased (`rebaseWhen: behind-base-branch`): the product repos run merge queues, which do not require an up-to-date branch, so the default only rebased on a conflict and a stale branch kept failing gates main had already fixed (npm audit on a pre-fix lockfile).",
+  "description": "MustardSeedNetworks fleet-wide Renovate policy. Edit HERE, not in each repo. seed/stem/niac-go extend this via { \"extends\": [\"github>MustardSeedNetworks/.github\"] }. Policy is always-latest after a short soak: updates are raised once a release is seven days old, and everything below a major auto-merges when CI is green. Security updates skip the soak and the off-hours schedule entirely. Normal updates and lock-file maintenance wait for off-hours in America/New_York (weeknights 18:00-08:00, and all weekend) so a bump does not land in the middle of a merge-queue burst. PRs rebase only when they conflict (`rebaseWhen: conflicted`). Rebasing on every main commit re-armed auto-merge after each ejection and fed the merge-queue loop (trellis#731, 294 ejections); the queue already tests the merged result, so a branch does not have to be current to land. Repos that generate code from protobuf extend github>MustardSeedNetworks/.github//presets/post-upgrade-generate so buf, protoc, and Connect bumps run `make generate generate-ts` on the same branch. The Mend app runs those commands only when its admin config allows them.",
   "extends": [
     "config:best-practices",
     ":semanticCommits",
@@ -10,17 +10,22 @@
   "labels": [
     "dependencies"
   ],
+  "timezone": "America/New_York",
   "schedule": [
-    "at any time"
+    "* 0-7 * * 1-5",
+    "* 18-23 * * 1-5",
+    "* * * * 0,6"
   ],
   "minimumReleaseAge": "7 days",
   "prConcurrentLimit": 10,
   "prHourlyLimit": 0,
-  "rebaseWhen": "behind-base-branch",
+  "rebaseWhen": "conflicted",
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
-      "at any time"
+      "* 0-7 * * 1-5",
+      "* 18-23 * * 1-5",
+      "* * * * 0,6"
     ],
     "automerge": true
   },
@@ -100,6 +105,18 @@
       ],
       "pinDigests": true,
       "groupName": "github actions"
+    },
+    {
+      "description": "Every MustardSeedNetworks/.github workflow and composite pin moves in one PR per repo. Separate PRs let a repo merge the semgrep pin and leave phone-width behind, so two repos are never on the same policy commit. One group keeps every uses: ref of this repository on one SHA; the same groupSlug makes that PR the same branch in every product repo.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "MustardSeedNetworks/.github",
+        "MustardSeedNetworks/.github/**"
+      ],
+      "groupName": "shared workflows",
+      "groupSlug": "shared-workflows"
     },
     {
       "description": "Digest pinning is for `uses:` refs only. The github-actions manager also reads tool versions out of known actions' `with:` inputs (depType `uses-with`, e.g. golangci-lint-action's `version: v2.13.2`), and an input holds a version string that cannot carry a digest. The rule above made Renovate propose `pin dependency golangci/golangci-lint to 27774aa` on every repo; the branch can never be written, so it sat under Errored on all four dashboards and hid real errors there (support plan G-11). Version bumps of these inputs still flow.",
@@ -241,6 +258,30 @@
       "datasourceTemplate": "node-version",
       "managerFilePatterns": [
         "/^\\.github/workflows/license-check\\.ya?ml$/"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Reusable CI workflows default the npm their callers install. It is a workflow input default, not a setup-node pin, so the github-actions manager cannot see it. Keeps it in the node toolchain group with the composite pin.",
+      "matchStrings": [
+        "npm-version:[\\s\\S]*?default:\\s*\"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\""
+      ],
+      "depNameTemplate": "npm",
+      "datasourceTemplate": "npm",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci-(?:backend|frontend|storybook|e2e|race)\\.ya?ml$/"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "ci-backend.yml defaults the golangci-lint version the reusable backend and Windows lint jobs run. It is a workflow input default, so neither the github-actions manager nor the Makefile regex sees it. Keeps it in the golangci-lint group with the product Makefile pins.",
+      "matchStrings": [
+        "golangci-lint-version:[\\s\\S]*?default:\\s*\"(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)\""
+      ],
+      "depNameTemplate": "github.com/golangci/golangci-lint/v2",
+      "datasourceTemplate": "go",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci-backend\\.ya?ml$/"
       ]
     }
   ],

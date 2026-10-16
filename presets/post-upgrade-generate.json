@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Opt-in companion to the fleet preset. A repo that generates Go and TypeScript from protobuf extends it alongside the fleet preset: { \"extends\": [\"github>MustardSeedNetworks/.github\", \"github>MustardSeedNetworks/.github//presets/post-upgrade-generate\"] }. Trellis is the repo this exists for: a buf, protoc-gen-go, protoc-gen-connect-go, protoc-gen-es, or Connect bump leaves gen/ and ui/src/gen/ stale, and `make check-generated` then fails the PR. The tasks run once per branch, after the upgrades, and commit whatever `make generate generate-ts` changed. The Mend Renovate GitHub App does not run postUpgradeTasks unless its admin config (not this file — the key is admin-only and ignored in a repo) sets allowPostUpgradeCommandTemplating and allowedPostUpgradeCommands to include \"^make generate generate-ts$\". Until that is set, Renovate skips the command and the PR is stale in the same way as before. A repo whose generate target differs overrides postUpgradeTasks.commands.",
+  "packageRules": [
+    {
+      "description": "Protobuf toolchain and Connect bumps regenerate committed code. Matched by the module Renovate actually sees: the `go install` pins (buf, protoc-gen-go, protoc-gen-connect-go), the Go modules, and the npm packages (@bufbuild/*, @connectrpc/*).",
+      "matchPackageNames": [
+        "github.com/bufbuild/buf",
+        "github.com/bufbuild/buf/**",
+        "google.golang.org/protobuf",
+        "google.golang.org/protobuf/**",
+        "connectrpc.com/connect",
+        "connectrpc.com/connect/**",
+        "@bufbuild/**",
+        "@connectrpc/**"
+      ],
+      "postUpgradeTasks": {
+        "commands": [
+          "make generate generate-ts"
+        ],
+        "fileFilters": [
+          "**/*"
+        ],
+        "executionMode": "branch"
+      }
+    }
+  ]
+}

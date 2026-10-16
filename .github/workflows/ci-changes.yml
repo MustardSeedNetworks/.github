@@ -1,0 +1,226 @@
+# Fleet-shared path filter. seed, stem, niac-go and trellis each copy this job
+# and then disagree about which directory is "CI". One definition, with the
+# caller's own filter list, so a repo can still name the paths that are inputs
+# to its suite.
+#
+# On merge_group every declared filter is "true": the queue has no PR base to
+# diff against, and it exists to test the merged result. Path filtering stays
+# in effect for pull_request and push.
+#
+# The matcher is scripts/ci-changes.py, read from THIS commit. `github.job_workflow_sha`
+# is empty in the context (.github#73), so the commit comes from the OIDC
+# token. The caller has to grant id-token: write or the job fails closed
+# rather than classifying paths with whatever main currently says.
+#
+#   changes:
+#     permissions:
+#       contents: read
+#       pull-requests: read
+#       id-token: write
+#     uses: MustardSeedNetworks/.github/.github/workflows/ci-changes.yml@<sha> # pin to a commit (Renovate bumps it)
+#     with:
+#       filters: |
+#         backend:
+#           - '**/*.go'
+#           - 'go.mod'
+#           - 'go.sum'
+#         frontend:
+#           - 'ui/**'
+#         docs:
+#           - '**/*.md'
+#         ci_infra:
+#           - '.github/workflows/**'
+#           - '.github/actions/**'
+#           - 'scripts/**'
+#
+# Outputs `backend`, `frontend`, `docs`, `ci_infra`, `darwin_bridge`, `c`,
+# `schema`, `https`, `hooks` and `docker` are the names the four product
+# ci.yml files already read. Each is "true", "false", or "" when that filter
+# was not declared. Any other name is in the `filters` output, a JSON object:
+# `fromJSON(needs.changes.outputs.filters).proto`.
+name: CI Changes (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      filters:
+        description: >-
+          paths-filter YAML. Top-level keys are the output names. `**` crosses
+          directories, `*` does not, a leading `!` excludes. Comments and blank
+          lines are ignored.
+        type: string
+        required: true
+    outputs:
+      filters:
+        description: JSON object of every declared filter name to "true" or "false".
+        value: ${{ jobs.changes.outputs.filters }}
+      policy-sha:
+        description: The .github commit the matcher was read from.
+        value: ${{ jobs.changes.outputs.policy-sha }}
+      backend:
+        description: '"true" when the backend filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.backend }}
+      frontend:
+        description: '"true" when the frontend filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.frontend }}
+      docs:
+        description: '"true" when the docs filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.docs }}
+      ci_infra:
+        description: '"true" when the ci_infra filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.ci_infra }}
+      darwin_bridge:
+        description: '"true" when the darwin_bridge filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.darwin_bridge }}
+      c:
+        description: '"true" when the c filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.c }}
+      schema:
+        description: '"true" when the schema filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.schema }}
+      https:
+        description: '"true" when the https filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.https }}
+      hooks:
+        description: '"true" when the hooks filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.hooks }}
+      docker:
+        description: '"true" when the docker filter matched, else "false" or "".'
+        value: ${{ jobs.changes.outputs.docker }}
+
+permissions: {}
+
+jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # dorny's replacement lists pull-request files through the API. A push
+      # does not use it; granting it on every event is the smaller token.
+      pull-requests: read
+      id-token: write
+    outputs:
+      filters: ${{ steps.classify.outputs.filters }}
+      policy-sha: ${{ steps.policy.outputs.sha }}
+      backend: ${{ steps.classify.outputs.backend }}
+      frontend: ${{ steps.classify.outputs.frontend }}
+      docs: ${{ steps.classify.outputs.docs }}
+      ci_infra: ${{ steps.classify.outputs.ci_infra }}
+      darwin_bridge: ${{ steps.classify.outputs.darwin_bridge }}
+      c: ${{ steps.classify.outputs.c }}
+      schema: ${{ steps.classify.outputs.schema }}
+      https: ${{ steps.classify.outputs.https }}
+      hooks: ${{ steps.classify.outputs.hooks }}
+      docker: ${{ steps.classify.outputs.docker }}
+    steps:
+      - name: Check out the calling repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history so a push can diff github.event.before without a
+          # second fetch. persist-credentials is false, so a later git fetch
+          # against a private repo would have no token.
+          fetch-depth: 0
+
+      - name: Resolve this workflow's own commit
+        id: policy
+        run: |
+          set -euo pipefail
+          sha=$(python3 - <<'PY'
+          import base64, json, os, sys, urllib.request
+
+          url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
+          if not url:
+              sys.exit(
+                  "no OIDC token endpoint: the job calling ci-changes.yml must grant "
+                  "`permissions: id-token: write`. Without it this job cannot tell "
+                  "which commit of itself is running."
+              )
+          request = urllib.request.Request(
+              url + "&audience=ci-changes-policy-ref",
+              headers={"Authorization": "bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              token = json.load(response)["value"]
+
+          claims = token.split(".")[1]
+          claims += "=" * (-len(claims) % 4)
+          sha = json.loads(base64.urlsafe_b64decode(claims)).get("job_workflow_sha") or ""
+          if len(sha) != 40 or sha.strip("0123456789abcdef"):
+              sys.exit(f"OIDC claim job_workflow_sha is not a commit SHA: {sha!r}")
+          print(sha)
+          PY
+          )
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Path filters will be classified by .github@$sha"
+
+      - name: Check out the policy repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/.github
+          ref: ${{ steps.policy.outputs.sha }}
+          path: .ci-changes
+          persist-credentials: false
+
+      - name: Assert the policy checkout is on this workflow's own commit
+        env:
+          WANT: ${{ steps.policy.outputs.sha }}
+        run: |
+          set -euo pipefail
+          got=$(git -C .ci-changes rev-parse HEAD)
+          if [ "$got" != "$WANT" ]; then
+            echo "::error::policy checkout landed on $got, expected $WANT"
+            exit 1
+          fi
+
+      # The file list is collected here and classified by the pinned script.
+      # pull_request uses the API, which sees renames (filename and
+      # previous_filename) without depending on how deep the clone is. push
+      # diffs the event's before SHA. Anything else (workflow_dispatch) diffs
+      # the parent commit, and a missing parent lists every tracked file so a
+      # manual run does not silently skip the suite.
+      - name: List changed files
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/changed-files.txt"
+          : > "$out"
+          case "$EVENT_NAME" in
+            merge_group)
+              ;;
+            pull_request)
+              gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+                --jq '.[] | .filename, .previous_filename // empty' >> "$out"
+              ;;
+            push)
+              if [ -z "${BEFORE}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+                git ls-files >> "$out"
+              elif git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+                git diff --name-only "$BEFORE" "$GITHUB_SHA" >> "$out"
+              else
+                echo "::warning::push before-SHA ${BEFORE} is not in this clone; running every filter"
+                git ls-files >> "$out"
+              fi
+              ;;
+            *)
+              if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+                git diff --name-only HEAD^ HEAD >> "$out"
+              else
+                git ls-files >> "$out"
+              fi
+              ;;
+          esac
+          echo "event=${EVENT_NAME} changed-files=$(grep -c . "$out" || true)"
+
+      - name: Classify changed paths
+        id: classify
+        env:
+          FILTERS: ${{ inputs.filters }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: python3 .ci-changes/scripts/ci-changes.py < "$RUNNER_TEMP/changed-files.txt"

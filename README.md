@@ -8,7 +8,8 @@ The goal: make a fleet-wide change by editing **one file here**, not three repos
 | File | Purpose |
 |------|---------|
 | `default.json` | Renovate policy preset. Repos extend it with `{ "extends": ["github>MustardSeedNetworks/.github"] }`. Edit dependency/lockstep policy here. |
-| `.github/workflows/*.yml` (reusable) | Shared `workflow_call` CI gates, build, and release logic (added in Phase 3). Repos call them via `uses: MustardSeedNetworks/.github/.github/workflows/<name>.yml@<sha>`. |
+| `presets/post-upgrade-generate.json` | Opt-in Renovate preset. A repo that generates code extends `github>MustardSeedNetworks/.github//presets/post-upgrade-generate` so buf, protoc, and Connect bumps run `make generate generate-ts`. |
+| `.github/workflows/*.yml` (reusable) | Shared `workflow_call` CI gates. Repos call them via `uses: MustardSeedNetworks/.github/.github/workflows/<name>.yml@<sha>`. The product-CI set is `ci-changes`, `ci-backend` (Linux, macOS, Windows), `ci-race`, `ci-frontend`, `ci-storybook`, `ci-e2e` (Playwright chromium/webkit shards), and `ci-complete`. `ci-complete` runs `if: ${{ !cancelled() }}`. Inputs are in each workflow's header. |
 | `.github/actions/*` (composite) | Shared job steps. Repos call them via `uses: MustardSeedNetworks/.github/.github/actions/<name>@<sha>`. |
 | `profile/README.md` | The organization profile shown at <https://github.com/MustardSeedNetworks>. Logo lives beside it. |
 | `SECURITY.md`, `CODE_OF_CONDUCT.md` | Org-wide defaults GitHub applies to every repo that has no file of its own. Product repos keep their own. |

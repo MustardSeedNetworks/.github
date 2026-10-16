@@ -1,0 +1,82 @@
+# Fleet-shared CI Complete aggregator, modeled on seed's ci.yml.
+#
+# Branch protection requires one check. This job fails when any result in
+# `results` is anything other than success or skipped, and passes when every
+# one of them is success or skipped. The caller passes `toJSON(needs)` from
+# the jobs it considers required. A docs-only PR whose backend was skipped
+# still passes. A failed job fails this one.
+#
+# The job condition is `if: ${{ !cancelled() }}`, not `always()`. `always()`
+# runs after a cancelled workflow, sees the cancelled upstream jobs, and posts
+# a red CI Complete for a run nobody cancelled on purpose. `!cancelled()` still
+# runs when an upstream failed or was skipped, which is the case the aggregator
+# exists for, and it does not run when the workflow was cancelled.
+#
+# The caller has to set the same condition. A caller job with no `if` is
+# skipped as soon as one needed job fails, and this workflow never starts.
+#
+# GitHub reports the check as `<caller job id> / CI Complete`. A repo that
+# adopts this in place of an inline job named "CI Complete" updates its
+# required status check to that prefixed name. Existing inline aggregators are
+# not callers of this file and keep the name they have.
+#
+#   ci-complete:
+#     needs: [changes, backend, frontend, e2e]
+#     if: ${{ !cancelled() }}
+#     permissions: {}
+#     uses: MustardSeedNetworks/.github/.github/workflows/ci-complete.yml@<sha> # pin to a commit (Renovate bumps it)
+#     with:
+#       results: ${{ toJSON(needs) }}
+name: CI Complete (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      results:
+        description: >-
+          `toJSON(needs)` from the caller. Each entry's `result` must be
+          `success` or `skipped`.
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  ci-complete:
+    name: CI Complete
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    # Not always(). A cancelled run must not post a red CI Complete.
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Verify upstream results
+        env:
+          RESULTS: ${{ inputs.results }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+
+          raw = os.environ.get("RESULTS", "")
+          try:
+              results = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              print(f"::error::results is not JSON: {exc}")
+              sys.exit(1)
+          if not isinstance(results, dict) or not results:
+              print("::error::results must be a non-empty object of job results")
+              sys.exit(1)
+
+          print("Upstream job results:")
+          print(json.dumps(results, indent=2, sort_keys=True))
+
+          bad = []
+          for name, value in results.items():
+              result = value.get("result") if isinstance(value, dict) else None
+              if result not in ("success", "skipped"):
+                  bad.append(f"{name}={result}")
+          if bad:
+              print("::error::One or more required CI jobs failed or were cancelled: " + ", ".join(bad))
+              sys.exit(1)
+          print("All required CI jobs passed (or were intentionally skipped).")
+          PY

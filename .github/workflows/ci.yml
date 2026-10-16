@@ -51,6 +51,16 @@ jobs:
       - name: Run the CI conformance tests
         run: python3 scripts/test-check-ci-conformance.py
 
+      # The reusable product-CI workflows are what four repos will pin. The
+      # aggregator condition and the path classifier are asserted here, the
+      # same way the conformance script's own rules are.
+      - name: Run the reusable CI workflow tests
+        run: |
+          set -euo pipefail
+          python3 scripts/test-renovate-policy.py
+          python3 scripts/test-ci-changes.py
+          python3 scripts/test-ci-workflows.py
+
       # The canonical palette is defined here, so its contrast is gated here:
       # the products only ever receive it by hash. .github#74 shipped eleven
       # tokens under their floor because the measured set was base and raised.
@@ -137,7 +147,10 @@ jobs:
       # ignores a config it cannot parse, so a typo here would not fail
       # anywhere — it would just stop the rules applying, across four repos.
       - name: Validate default.json
-        run: scripts/renovate-soak/node_modules/.bin/renovate-config-validator default.json
+        run: |
+          set -euo pipefail
+          scripts/renovate-soak/node_modules/.bin/renovate-config-validator default.json
+          scripts/renovate-soak/node_modules/.bin/renovate-config-validator presets/post-upgrade-generate.json
 
       # Validation is syntax only. It said nothing while `config:best-practices`
       # overrode the fleet's seven-day npm soak with three days (.github#60),
@@ -150,6 +163,7 @@ jobs:
           set -euo pipefail
           node scripts/test-check-renovate-soak.mjs
           node scripts/renovate-soak/check-renovate-soak.mjs
+          node scripts/renovate-soak/test-groups.mjs
 
   workflow-lint:
     name: Workflow Lint

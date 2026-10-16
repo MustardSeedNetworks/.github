@@ -1,0 +1,149 @@
+# Fleet-shared Storybook interaction and accessibility job, modeled on
+# seed's ci.yml.
+#
+# Browser install is split from its apt half. `--with-deps` runs apt, and
+# bundling the two left the apt half with no step budget and no dpkg lock
+# bound: seed lost a whole job budget that way on 2026-08-18 (run
+# 32161702107) and ejected a release PR from the merge queue. The apt half
+# goes through the shared apt-install action, which bounds the wait.
+#
+#   storybook:
+#     needs: changes
+#     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci_infra == 'true'
+#     permissions:
+#       contents: read
+#     uses: MustardSeedNetworks/.github/.github/workflows/ci-storybook.yml@<sha> # pin to a commit (Renovate bumps it)
+name: CI Storybook (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        description: When false, the job is skipped.
+        type: boolean
+        required: false
+        default: true
+      ui-dir:
+        description: Directory the UI commands run in.
+        type: string
+        required: false
+        default: ui
+      node-version-file:
+        description: File setup-node reads the Node version from.
+        type: string
+        required: false
+        default: .nvmrc
+      npm-version:
+        description: npm installed globally after setup-node. The fleet pin.
+        type: string
+        required: false
+        default: "12.1.0"
+      install-command:
+        description: Dependency install. Runs in ui-dir.
+        type: string
+        required: false
+        default: npm ci
+      install-deps-command:
+        description: >-
+          Command the apt-install action runs to install Chromium's OS
+          packages. The job's working-directory does not apply inside that
+          action, so the command cds itself.
+        type: string
+        required: false
+        default: cd ui && node ./node_modules/playwright/cli.js install-deps chromium
+      install-browser-command:
+        description: Chromium download. Retried. Runs in ui-dir.
+        type: string
+        required: false
+        default: node ./node_modules/playwright/cli.js install chromium
+      test-command:
+        description: Interaction and accessibility tests. Empty skips them.
+        type: string
+        required: false
+        default: npm run test:storybook
+      contract-command:
+        description: >-
+          Proves an injected defect fails the gate. Empty skips it. Seed's
+          script is `npm run test:storybook:contract`.
+        type: string
+        required: false
+        default: npm run test:storybook:contract
+      timeout-minutes:
+        description: Job timeout.
+        type: number
+        required: false
+        default: 25
+
+permissions: {}
+
+jobs:
+  storybook:
+    name: Storybook interactions and accessibility
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    if: ${{ inputs.enabled }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.ui-dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          package-manager-cache: false
+
+      - name: Install npm
+        env:
+          NPM_VERSION: ${{ inputs.npm-version }}
+        run: npm install -g "npm@${NPM_VERSION}"
+
+      - name: Install dependencies
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+        run: sh -euc "$INSTALL_COMMAND"
+
+      - name: Install Chromium OS dependencies
+        uses: ./.github/actions/apt-install
+        timeout-minutes: 10
+        with:
+          # `packages` is required by the action even though `command` ignores
+          # it. An empty list keeps actionlint quiet without installing anything.
+          packages: ""
+          command: ${{ inputs.install-deps-command }}
+
+      - name: Install Chromium
+        timeout-minutes: 10
+        env:
+          INSTALL_BROWSER: ${{ inputs.install-browser-command }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if sh -euc "$INSTALL_BROWSER"; then
+              exit 0
+            fi
+            echo "::warning::Chromium download failed (attempt ${attempt}/3)"
+            sleep $((attempt * 15))
+          done
+          echo "::error::Chromium download failed three times"
+          exit 1
+
+      - name: Run interaction and accessibility tests
+        if: ${{ inputs.test-command != '' }}
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+          STORYBOOK_DISABLE_TELEMETRY: "1"
+        run: sh -euc "$TEST_COMMAND"
+
+      - name: Verify injected defects fail the gate
+        if: ${{ inputs.contract-command != '' }}
+        env:
+          CONTRACT_COMMAND: ${{ inputs.contract-command }}
+          STORYBOOK_DISABLE_TELEMETRY: "1"
+        run: sh -euc "$CONTRACT_COMMAND"
