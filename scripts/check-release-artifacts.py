@@ -11,7 +11,7 @@ release's asset list and checks it against the product's own declaration,
     seed-{version}-linux-amd64.tar.gz
     seed_{version}_amd64.deb
 
-A primary artifact is a `.tar.gz`, `.zip`, `.deb` or `.rpm`. For the release
+A primary artifact is a `.tar.gz`, `.zip`, `.deb`, `.rpm` or `.pkg`. For the release
 to conform:
 
 1. every declared artifact is published, with its `.sbom.json`, its
@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 EXPECT_PATH = ".github/release-artifacts.txt"
-PRIMARY_SUFFIXES = (".tar.gz", ".zip", ".deb", ".rpm")
+PRIMARY_SUFFIXES = (".tar.gz", ".zip", ".deb", ".rpm", ".pkg")
 COMPANIONS = (".sbom.json", ".cosign.bundle", ".sbom.json.cosign.bundle")
 CHECKSUMS = ("checksums.txt", "checksums.txt.cosign.bundle")
 PROVENANCE_SUFFIX = ".intoto.jsonl"
