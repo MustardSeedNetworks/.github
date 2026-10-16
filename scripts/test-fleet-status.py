@@ -338,6 +338,14 @@ class WorktreeTests(unittest.TestCase):
         self.assertIn(f"| {self.root / 'widget-new'} | feat/new | 0 | unreadable: HTTP 404: Not Found |", page)
         self.assertNotIn("not-a-repo", page)
 
+    def test_orphaned_worktree_is_reported_not_fatal(self) -> None:
+        orphan = self.root / "widget-orphan"
+        orphan.mkdir()
+        (orphan / ".git").write_text(f"gitdir: {self.root / 'gone/.git/worktrees/widget-orphan'}\n")
+        page = "\n".join(fs.worktrees_section(fake_api({}), [self.root]))
+        self.assertIn(f"| {orphan} | ? | ? | broken: not a git repository |", page)
+        self.assertIn(f"| {self.root / 'widget'} | main | 0 | — |", page)
+
     def test_no_roots_says_not_collected(self) -> None:
         self.assertIn("Not collected", "\n".join(fs.worktrees_section(fake_api({}), [])))
 
