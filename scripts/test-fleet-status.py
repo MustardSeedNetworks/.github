@@ -185,6 +185,74 @@ job hangs. *Acceptance:* it does not.
 """
 
 
+FOUNDATION_PLAN = """\
+# Widget v1 plan
+
+## Rows
+
+| ID / entry | State | Details |
+| --- | --- | --- |
+| W-1 | **DONE** `abc1234` | [Full](#plan-detail-1) |
+| W-2 | TODO | [Full](#plan-detail-2) |
+| W-3 | IN-PROGRESS `fix/x` | [Full](#plan-detail-3) |
+
+## Plan row details
+
+### Plan detail 1
+
+ID:
+
+W-1
+
+Task:
+
+**Adopt foundation `pkg/password` (msn-owner-decisions
+§24).** Delete the local hashing.
+
+### Plan detail 2
+
+ID:
+
+W-2
+
+Task:
+
+Unrelated work.
+
+### Plan detail 3
+
+ID:
+
+W-3
+
+Task:
+
+**Emit the event (rowed by interactive-foundation-first).**
+
+Status:
+
+IN-PROGRESS
+"""
+
+
+class FoundationAdoptionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp())
+
+    def test_lists_rows_citing_the_decision_and_counts_done(self) -> None:
+        (self.dir / "widget-v1-plan.md").write_text(FOUNDATION_PLAN)
+        page = "\n".join(fs.foundation_section(self.dir))
+        self.assertIn("## Foundation adoption", page)
+        self.assertIn("1 of 2 rows done.", page)
+        self.assertIn("| widget-v1-plan.md | W-1 | **DONE** `abc1234` |", page)
+        self.assertIn("| widget-v1-plan.md | W-3 | IN-PROGRESS `fix/x` |", page)
+        self.assertNotIn("| W-2 |", page)
+
+    def test_no_rows_says_so(self) -> None:
+        (self.dir / "widget-v1-plan.md").write_text(PLAN)
+        self.assertIn("No plan row cites", "\n".join(fs.foundation_section(self.dir)))
+
+
 class PlanDetailTests(unittest.TestCase):
     def test_index_rows_carry_their_linked_task(self) -> None:
         rows = fs.parse_index("widget-v1-plan.md", DETAILED_PLAN.format(w1="DONE", w2="TODO"))
@@ -358,7 +426,7 @@ class RenderTests(unittest.TestCase):
         page = fs.render(args, fake_api(repo_responses("o/a", [run("CI", "success")])), NOW)
         headings = [line for line in page.splitlines() if line.startswith("## ")]
         self.assertEqual(
-            headings, ["## Driver health", "## Stuck pull requests", "## Repositories", "## Open pull requests", "## Plans", "## CI load", "## Working trees"]
+            headings, ["## Driver health", "## Stuck pull requests", "## Repositories", "## Open pull requests", "## Plans", "## Foundation adoption", "## CI load", "## Working trees"]
         )
 
 

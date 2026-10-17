@@ -85,6 +85,8 @@ PLAN_REPOS = {
 }
 SUPPORT = "support repos"
 QUEUE_GLOB = "msn-master-queue-*.md"
+# Owner decision §24 (foundation first): its rows cite the decision in their Task.
+FOUNDATION_FIRST = re.compile(r"§24\b|foundation-first")
 QUEUE_HEADER = "| ID | Driver | Sev | Issue | State |"
 # A keyword estimate, not a judgement: on 2026-10-15 it agreed with a hand
 # classification of all 698 DONE rows on CI-or-not for 83 % of them. Rows
@@ -213,6 +215,17 @@ def plans_section(plans_dir: Path) -> list[str]:
         return [*out, "None.", ""]
     out += ["| Plan | Section | Row | State |", "| --- | --- | --- | --- |"]
     out += [f"| {r.plan} | {cell(r.section)} | {cell(r.row_id)} | {cell(r.state)} |" for r in moving]
+    return [*out, ""]
+
+
+def foundation_section(plans_dir: Path) -> list[str]:
+    out = ["## Foundation adoption", ""]
+    rows = [r for path in sorted(plans_dir.glob(PLAN_GLOB)) for r in parse_plan(path) if FOUNDATION_FIRST.search(r.task)]
+    if not rows:
+        return [*out, "No plan row cites msn-owner-decisions §24.", ""]
+    done = sum(bool(re.match(r"\W*DONE\b", r.state)) for r in rows)
+    out += [f"{done} of {len(rows)} rows done.", "", "| Plan | Row | State |", "| --- | --- | --- |"]
+    out += [f"| {r.plan} | {cell(r.row_id)} | {cell(r.state)} |" for r in rows]
     return [*out, ""]
 
 
@@ -482,6 +495,7 @@ def render(args: argparse.Namespace, api: Api, now: datetime) -> str:
         *driver_section(args.watchdog_state, now),
         *github_sections(api, args.repo or list(DEFAULT_REPOS), now),
         *plans_section(args.plans),
+        *foundation_section(args.plans),
         *ci_load_section(api, args.repo or list(DEFAULT_REPOS), args.plans, now),
         *worktrees_section(api, args.worktrees),
     ]
