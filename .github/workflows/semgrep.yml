@@ -14,8 +14,11 @@ on:
 
 # Callers must grant security-events: write as well as contents: read — the
 # all-severity SARIF is published to the code-scanning tab. A caller that
-# grants only contents: read will fail at the upload step, deliberately: a
-# silently-skipped upload is how a security feed goes stale unnoticed.
+# grants only contents: read will fail at the upload step on pull_request and
+# push, deliberately: a silently-skipped upload is how a security feed goes
+# stale unnoticed. merge_group skips the upload only (see that step); the
+# scan and the ERROR gate still run, and a called workflow sees the caller's
+# github.event_name, so this does not require a new input.
 permissions:
   contents: read
   security-events: write
@@ -54,17 +57,28 @@ jobs:
             --output semgrep-results.sarif \
             --metrics=off
 
-      # Not continue-on-error. This is the visibility half of the gate, and an
-      # upload that can fail silently is the defect being fixed here.
+      # Not continue-on-error. On pull_request and push this is the visibility
+      # half of the gate, and an upload that fails has to fail the job: a
+      # swallowed error is how the code-scanning feed goes stale unnoticed.
+      #
+      # merge_group is the one event that skips it. GitHub deletes
+      # refs/heads/gh-readonly-queue/... before upload-sarif posts, and the
+      # code-scanning API then rejects the call with "ref ... not found".
+      # That fails this job, CI Complete goes red, and the PR is dropped from
+      # the queue. The pull_request run already published the SARIF for the
+      # same commits. success() keeps a failed scan from attempting the
+      # upload; the finding gate below still runs whenever the scan did.
       - name: Upload Semgrep results
+        if: ${{ success() && github.event_name != 'merge_group' && !startsWith(github.ref, 'refs/heads/gh-readonly-queue/') }}
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: semgrep-results.sarif
           category: semgrep
 
-      # The blocking decision, read back from the SARIF the previous step just
-      # published — the same shape as the Trivy gate in each repo's ci.yml.
-      # Semgrep's ERROR severity maps to SARIF level "error".
+      # The blocking decision, read from the SARIF file the scan wrote. It
+      # does not read the code-scanning API, so a merge_group run that skipped
+      # the upload still fails closed on ERROR. Semgrep's ERROR severity maps
+      # to SARIF level "error".
       - name: Fail on ERROR-severity findings
         run: |
           cat > /tmp/count-errors.py <<'PYEOF'

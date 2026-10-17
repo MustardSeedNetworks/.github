@@ -5,7 +5,9 @@
 # used to rebase every Renovate PR on every main commit
 # (`rebaseWhen: behind-base-branch`), which pushed that commit after every
 # merge; policy is now `conflicted`, and a conflict rebase or a human push can
-# still re-arm it. Nothing in that loop asks whether the failure was
+# still re-arm it. A repo with no merge queue whose branch protection requires
+# the head to be up to date opts into presets/rebase-when-behind instead of
+# changing this default. Nothing in that loop asks whether the failure was
 # deterministic. trellis#731 was ejected 294
 # times and #756 203 times between 2026-10-07 and 10-14, 527 of trellis's 671
 # merge-group CI runs (artifacts/ci-load-2026-10-15 in the plans repo). Gating
