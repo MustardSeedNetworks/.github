@@ -26,6 +26,16 @@ class RenovatePolicy(unittest.TestCase):
 
     def test_rebase_only_when_conflicted(self) -> None:
         self.assertEqual(self.config["rebaseWhen"], "conflicted")
+        self.assertIn("presets/rebase-when-behind", self.config["description"])
+
+    def test_rebase_behind_is_opt_in_and_does_not_replace_the_default(self) -> None:
+        preset = json.loads((ROOT / "presets" / "rebase-when-behind.json").read_text())
+        self.assertEqual(preset["rebaseWhen"], "behind-base-branch")
+        self.assertNotIn("packageRules", preset)
+        self.assertIn("AFTER the fleet preset", preset["description"])
+        # The default file is what every repo extends. The opt-in must not
+        # have been folded into it.
+        self.assertEqual(self.config["rebaseWhen"], "conflicted")
 
     def test_normal_updates_and_lockfile_maintenance_are_off_hours(self) -> None:
         self.assertEqual(self.config["timezone"], "America/New_York")

@@ -37,6 +37,20 @@ const effective = (update) =>
 if (resolved.rebaseWhen !== 'conflicted') {
   fail(`resolved rebaseWhen is ${JSON.stringify(resolved.rebaseWhen)}, not "conflicted"`)
 }
+
+const behind = JSON.parse(readFileSync(resolve(root, 'presets/rebase-when-behind.json'), 'utf8'))
+const optedIn = mergeChildConfig(resolved, behind)
+if (optedIn.rebaseWhen !== 'behind-base-branch') {
+  fail(
+    `extending rebase-when-behind after the fleet preset left rebaseWhen ${JSON.stringify(optedIn.rebaseWhen)}`,
+  )
+}
+const wrongOrder = mergeChildConfig(behind, resolved)
+if (wrongOrder.rebaseWhen !== 'conflicted') {
+  fail(
+    `the fleet preset no longer overrides an earlier rebaseWhen (${JSON.stringify(wrongOrder.rebaseWhen)}); the opt-in must be listed after it`,
+  )
+}
 if (resolved.timezone !== 'America/New_York') {
   fail(`resolved timezone is ${JSON.stringify(resolved.timezone)}`)
 }

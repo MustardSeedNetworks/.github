@@ -283,6 +283,60 @@ class ReusableWorkflows(unittest.TestCase):
         code, out = run_complete({})
         self.assertNotEqual(code, 0, out)
 
+    def test_every_sarif_upload_skips_merge_group_without_swallowing_errors(self) -> None:
+        """The queue branch is deleted before upload-sarif runs.
+
+        A missing ref fails the step, which fails CI Complete and drops the
+        PR. The scan and the finding gate still run. continue-on-error would
+        also hide a broken upload on pull_request, so the step is skipped
+        instead, and only on a merge-queue event or ref.
+        """
+        roots = [WORKFLOWS, ROOT / ".github" / "actions"]
+        found: list[str] = []
+        for root in roots:
+            for path in sorted(root.rglob("*.yml")):
+                lines = path.read_text().splitlines()
+                for index, line in enumerate(lines):
+                    code = line.split("#", 1)[0]
+                    if "github/codeql-action/upload-sarif@" not in code:
+                        continue
+                    rel = path.relative_to(ROOT).as_posix()
+                    found.append(f"{rel}:{index + 1}")
+                    # Comments may name the defect; only the step's code counts.
+                    window = "\n".join(
+                        line.split("#", 1)[0]
+                        for line in lines[max(0, index - 20): index + 1]
+                    )
+                    self.assertIn(
+                        "github.event_name != 'merge_group'",
+                        window,
+                        f"{rel}:{index + 1} still uploads on merge_group",
+                    )
+                    self.assertIn(
+                        "refs/heads/gh-readonly-queue/",
+                        window,
+                        f"{rel}:{index + 1} still uploads a deleted queue ref",
+                    )
+                    self.assertIn("success()", window, f"{rel}:{index + 1}")
+                    self.assertNotIn(
+                        "continue-on-error",
+                        window,
+                        f"{rel}:{index + 1} swallows upload failures",
+                    )
+        self.assertEqual(found, [".github/workflows/semgrep.yml:73"])
+
+    def test_semgrep_scan_and_finding_gate_still_run_on_merge_group(self) -> None:
+        text = (WORKFLOWS / "semgrep.yml").read_text()
+        scan, upload_and_gate = text.split("- name: Run Semgrep (all severities, SARIF)", 1)
+        upload, gate = upload_and_gate.split("- name: Fail on ERROR-severity findings", 1)
+        del scan
+        self.assertNotIn("merge_group", upload.split("run:", 1)[0].split("- name: Upload", 1)[0])
+        gate_header = gate.split("run:", 1)[0]
+        self.assertNotIn("if:", gate_header)
+        self.assertNotIn("merge_group", gate_header)
+        self.assertIn('if level == "error"', gate)
+        self.assertIn("exit 1", gate)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

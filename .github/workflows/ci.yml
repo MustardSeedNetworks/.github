@@ -151,6 +151,7 @@ jobs:
           set -euo pipefail
           scripts/renovate-soak/node_modules/.bin/renovate-config-validator default.json
           scripts/renovate-soak/node_modules/.bin/renovate-config-validator presets/post-upgrade-generate.json
+          scripts/renovate-soak/node_modules/.bin/renovate-config-validator presets/rebase-when-behind.json
 
       # Validation is syntax only. It said nothing while `config:best-practices`
       # overrode the fleet's seven-day npm soak with three days (.github#60),

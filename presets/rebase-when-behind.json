@@ -1,0 +1,5 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Opt-in companion to the fleet preset for a repository whose branch protection requires the head branch to be up to date and that has no merge queue. The fleet default is rebaseWhen conflicted: rebasing on every main commit re-armed auto-merge after each ejection and fed the merge-queue loop (trellis#731), and a queue already tests the combined result. Without a queue, conflicted leaves a Renovate PR stranded behind main until it conflicts (foundation). Extend this AFTER the fleet preset so the scalar wins: { \"extends\": [\"github>MustardSeedNetworks/.github\", \"github>MustardSeedNetworks/.github//presets/rebase-when-behind\"] }. Listed first, the fleet preset's conflicted value overwrites this one.",
+  "rebaseWhen": "behind-base-branch"
+}
