@@ -71,11 +71,14 @@ class ConformanceChecks(unittest.TestCase):
                     theme: str | None = None,
                     stylesheet: str | None = None,
                     locales_alias: str | None = None,
-                    locales_dir: str = "internal/i18n/locales") -> tuple[int, str]:
+                    locales_dir: str = "internal/i18n/locales",
+                    extra_workflows: dict[str, str] | None = None) -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".github/workflows").mkdir(parents=True)
             (root / ".github/workflows/ci.yml").write_text(ci)
+            for name, body in (extra_workflows or {}).items():
+                (root / ".github/workflows" / name).write_text(body)
             # The unrelated checks (CODEOWNERS, governance scripts, advisory
             # list) are not under test here; give them what they need so the
             # only findings are the ones each case is about.
@@ -160,6 +163,36 @@ class ConformanceChecks(unittest.TestCase):
         violations per repo, all false.
         """
         self.assertQuiet(GOOD_CI, "without -ldflags")
+
+    def test_push_trigger_on_codeql_is_rejected(self) -> None:
+        code, out = self.run_checker(GOOD_CI, extra_workflows={
+            "codeql.yml": "name: CodeQL\non:\n  push:\n    branches: [main]\n"
+                          "  schedule:\n    - cron: '0 6 * * 1'\njobs:\n  analyze:\n    runs-on: ubuntu-latest\n    steps: []\n",
+        })
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("codeql.yml: push trigger", out)
+
+    def test_weekly_codeql_without_push_is_accepted(self) -> None:
+        _, out = self.run_checker(GOOD_CI, extra_workflows={
+            "codeql.yml": "name: CodeQL\non:\n  pull_request:\n    branches: [main]\n"
+                          "  schedule:\n    - cron: '0 6 * * 1'\njobs:\n  analyze:\n    runs-on: ubuntu-latest\n    steps: []\n",
+        })
+        self.assertNotIn("codeql.yml: push trigger", out)
+
+    def test_subdaily_release_please_cron_is_rejected(self) -> None:
+        code, out = self.run_checker(GOOD_CI, extra_workflows={
+            "release-please.yml": "name: Release Please\non:\n  schedule:\n    - cron: '07 */3 * * *'\n"
+                                  "jobs:\n  release:\n    runs-on: ubuntu-latest\n    steps: []\n",
+        })
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("more often than daily", out)
+
+    def test_daily_release_please_cron_is_accepted(self) -> None:
+        _, out = self.run_checker(GOOD_CI, extra_workflows={
+            "release-please.yml": "name: Release Please\non:\n  schedule:\n    - cron: '07 7 * * *'\n"
+                                  "jobs:\n  release:\n    runs-on: ubuntu-latest\n    steps: []\n",
+        })
+        self.assertNotIn("more often than daily", out)
 
     def test_main_concurrency_must_key_on_sha(self) -> None:
         ci = GOOD_CI.replace(
