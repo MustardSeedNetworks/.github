@@ -1,0 +1,28 @@
+name: 'Repo checks (shared gates)'
+description: >-
+  Run the fleet's repo-local gates — banned vocabulary, @layer components
+  variants, the TypeScript strictness contract and Go package reachability —
+  from the single canonical copy in MustardSeedNetworks/.github. Each product
+  keeps only its own policy files (banned-vocabulary exclusions, the
+  reachability baseline).
+
+  A composite action for the same reason as i18n-validate: the scripts arrive
+  with the action checkout, so there is no second checkout and no ref to keep
+  in sync, and the step stays in the caller's own job.
+
+inputs:
+  checks:
+    description: >-
+      Space-separated checks to run, in order: banned-vocabulary,
+      component-variants, tsconfig-flags, package-reachability.
+      package-reachability needs Go set up by the calling job.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Run repo checks
+      shell: bash
+      env:
+        CHECKS: ${{ inputs.checks }}
+      run: bash "${{ github.action_path }}/../../../scripts/repo-checks/run.sh" $CHECKS
