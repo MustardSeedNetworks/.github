@@ -19,6 +19,7 @@ The goal: make a fleet-wide change by editing **one file here**, not three repos
 | `scripts/fleet-status.py` | Writes the fleet `STATUS.md`: plans of record, open PRs, CI on main, releases, and — on the driver host — driver health and working trees. `fleet-status.yml` runs the GitHub half on dispatch. |
 | `scripts/check-release-artifacts.py` | Checks that a product's latest release published exactly the artifacts its `.github/release-artifacts.txt` declares, each with its SBOM and cosign bundle, plus checksums and provenance. `release-conformance.yml` runs it daily over the four products. |
 | `scripts/i18n/` | The fleet i18n gate — one canonical copy of the checks; each repo keeps only its own glossary, banned vocabulary and locales. See `scripts/i18n/README.md`. |
+| `scripts/repo-checks/` | The repo-local gates the products used to copy (banned vocabulary, `@layer components` variants, the TypeScript strictness contract, Go package reachability, stale test binaries). CI runs them through the `repo-checks` composite action; `make test` and the hooks run them through each repo's `scripts/shared-check.sh`, a copy of `shared-check-shim.sh` that reads the same pin from `ci.yml`. Each repo keeps only its own exclusion list and reachability baseline. |
 
 ## Discipline
 

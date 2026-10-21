@@ -95,6 +95,16 @@ jobs:
       - name: Run the merge-queue ejection tests
         run: python3 scripts/test-merge-queue-ejection.py
 
+      # The repo checks are the one copy every product's CI and `make test`
+      # run (G-21), so a checker that stops failing weakens four repos at once.
+      - name: Run the shared repo-check tests
+        run: |
+          set -euo pipefail
+          python3 scripts/repo-checks/test-check-banned-vocabulary.py
+          python3 scripts/repo-checks/test-check-component-variants.py
+          python3 scripts/repo-checks/test-check-tsconfig-flags.py
+          python3 scripts/repo-checks/test-run.py
+
       # A syntax error in the conformance script fails every product repo's
       # ci-conformance job, so compiling it here turns that into a local failure.
       - name: Compile every policy script
