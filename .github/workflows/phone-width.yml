@@ -229,7 +229,7 @@ jobs:
       # Renovate job already does.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "26.11.1"
+          node-version: "26.12.0"
 
       # The two commands go through the environment rather than into the script
       # text: a `${{ }}` expansion inside a `run:` block is expanded before the
