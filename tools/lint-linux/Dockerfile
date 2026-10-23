@@ -14,7 +14,7 @@
 # repo whenever either changes, so a rebuild is actually picked up.
 FROM golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
 
-ARG GOLANGCI_VERSION=v2.14.0
+ARG GOLANGCI_VERSION=v2.15.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libpcap-dev \
