@@ -40,7 +40,7 @@ on:
         description: npm installed globally after setup-node. The fleet pin.
         type: string
         required: false
-        default: "12.2.0"
+        default: "12.2.1"
       install-command:
         description: Dependency install. Runs in ui-dir.
         type: string
