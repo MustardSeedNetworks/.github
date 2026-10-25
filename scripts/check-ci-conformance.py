@@ -39,6 +39,12 @@ Checks
    four UI repos with nothing able to see it, so all four shipped the same
    1.45:1 light border.
 
+10. CodeQL, Scorecard, the license scan, and the TODO tracker do not run on
+    push to main, and Release Please's cron is at most daily. Those four
+    already have a weekly schedule. A push trigger ran them again on every
+    main commit and filled the Free plan's 20 concurrent jobs. Release Please
+    already runs from workflow_run; a sub-daily cron is a second copy.
+
 Exit 0 clean, 1 on any finding.
 """
 
@@ -446,6 +452,67 @@ def ldflags_parity(root: Path) -> list[str]:
     return hits
 
 
+# Satellite workflows. Each already has a weekly schedule (and, where it
+# matters, a pull_request trigger). A push trigger repeats that work on the
+# commit that just landed and takes slots from the merge queue.
+PUSH_BUDGET_WORKFLOWS = (
+    "codeql.yml",
+    "scorecard.yml",
+    "license-check.yml",
+    "todo-tracker.yml",
+)
+
+
+def on_block(text: str) -> str:
+    """The `on:` mapping only. Job steps further down are not triggers."""
+    match = re.search(
+        r"^on:\n(.*?)(?=^(?:jobs|permissions|concurrency|env|defaults):)",
+        text,
+        re.M | re.S,
+    )
+    return match.group(1) if match else ""
+
+
+def actions_budget(root: Path) -> list[str]:
+    """Keep satellite workflows and Release Please off the push hot path.
+
+    The org is on the GitHub Free plan: 20 concurrent hosted jobs for every
+    repository together. CodeQL alone is two language jobs per event. Running
+    it, Scorecard, the license scan, and the TODO tracker on every push to
+    main stacked those jobs on top of the merge queue.
+    """
+    findings = []
+    workflows = root / ".github" / "workflows"
+    for name in PUSH_BUDGET_WORKFLOWS:
+        path = workflows / name
+        if not path.exists():
+            continue
+        if re.search(r"^  push:\s*$", on_block(path.read_text(errors="ignore")), re.M):
+            findings.append(
+                f".github/workflows/{name}: push trigger runs this on every "
+                "main commit. Keep the weekly schedule, and the pull_request "
+                "trigger where the workflow has one. The org has 20 "
+                "concurrent jobs."
+            )
+    release_please = workflows / "release-please.yml"
+    if release_please.exists():
+        # Only the schedule under `on:`. A cron mentioned in a comment or in
+        # a job step is not a trigger.
+        for cron in re.findall(
+            r"cron:\s*['\"]([^'\"]+)['\"]",
+            on_block(release_please.read_text(errors="ignore")),
+        ):
+            fields = cron.split()
+            hour = fields[1] if len(fields) > 1 else ""
+            if "*" in hour or "/" in hour:
+                findings.append(
+                    ".github/workflows/release-please.yml: schedule "
+                    f"{cron!r} is more often than daily. workflow_run is the "
+                    "trigger; the cron is a once-a-day backstop."
+                )
+    return findings
+
+
 def main_concurrency(root: Path) -> list[str]:
     """Main pushes need a per-commit concurrency group.
 
@@ -572,7 +639,7 @@ def main() -> int:
         findings += 1
 
     for check in (composite_setup, govulncheck_advisory, ldflags_parity,
-                  main_concurrency, locales_home):
+                  main_concurrency, locales_home, actions_budget):
         for msg in check(root):
             fail(msg)
             findings += 1
