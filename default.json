@@ -65,7 +65,7 @@
       "groupName": "go toolchain"
     },
     {
-      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR. Both `typescript` and `@typescript/native-preview` are listed so the group keeps covering the compiler across the TS7 stable migration. `@vitest/**` is listed with `vitest` because the scoped packages declare an EXACT peer on it — a PR bumping either half alone fails ERESOLVE and can never go green, which stalled four PRs across three repos before it was noticed. `custom.regex` is listed so the `biome.json` schema URL (its manager is the regex one above, with depName `@biomejs/biome`) rides in the same PR as the package: grouped by manager it was raised alone, merged while the npm half could not resolve, and left every UI repo's `$schema` a version ahead of the installed Biome (.github#68).",
+      "description": "Frontend toolchain (React, Vite, Vitest, Biome, Tailwind, TypeScript, types) as one PR. Both `typescript` and `@typescript/native-preview` are listed so the group keeps covering the compiler across the TS7 stable migration. `@vitest/**` is listed with `vitest` because the scoped packages declare an EXACT peer on it — a PR bumping either half alone fails ERESOLVE and can never go green, which stalled four PRs across three repos before it was noticed. `custom.regex` is listed so the `biome.json` schema URL (its manager is the regex one above, with depName `@biomejs/biome`) rides in the same PR as the package: grouped by manager it was raised alone, merged while the npm half could not resolve, and left every UI repo's `$schema` a version ahead of the installed Biome (.github#68). `mcr.microsoft.com/playwright` is listed with the Playwright packages because the E2E container ships the browser binaries that runner version expects, and the shared ci-e2e guard rejects a mismatch by design: left out, the npm half was bumped alone and failed every E2E shard in all four UI repos before a test ran (.github#215). The group therefore also waits on the image's own release age.",
       "matchManagers": [
         "npm",
         "custom.regex"
@@ -84,6 +84,7 @@
         "@vitest/**",
         "@playwright/test",
         "playwright",
+        "mcr.microsoft.com/playwright",
         "tailwindcss"
       ],
       "groupName": "frontend toolchain"
@@ -186,6 +187,18 @@
     }
   ],
   "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Product ci.yml files pass the E2E container to the shared ci-e2e workflow as a `playwright-image` input rather than a job `container:`, so the github-actions manager cannot see it. Tag and digest move together, in the frontend toolchain group with @playwright/test (.github#215).",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "playwright-image:\\s*(?<depName>mcr\\.microsoft\\.com/playwright):(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+-noble)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    },
     {
       "customType": "regex",
       "description": "Go tools installed as `go install <module>@<version>` in Makefiles, mk/ fragments and workflows. Renovate's gomod manager only reads go.mod, so without this these pins are invisible to it — and an invisible pin is worse than a floating one, because it goes stale silently. Covers the security gates (govulncheck, gitleaks, staticcheck) among others.",
