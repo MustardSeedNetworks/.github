@@ -37,7 +37,7 @@ jobs:
 
 GOOD_DOCKERFILE = """\
 FROM golang:1.27.1-bookworm
-ARG GOLANGCI_VERSION=v2.14.0
+ARG GOLANGCI_VERSION=v2.15.0
 RUN go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_VERSION}
 """
 
@@ -103,7 +103,7 @@ class SelfPinGate(unittest.TestCase):
         self.assertIn("pin a concrete tag", out)
 
     def test_floating_version_arg_is_rejected(self) -> None:
-        bad = GOOD_DOCKERFILE.replace("GOLANGCI_VERSION=v2.14.0", "GOLANGCI_VERSION=latest")
+        bad = GOOD_DOCKERFILE.replace("GOLANGCI_VERSION=v2.15.0", "GOLANGCI_VERSION=latest")
         code, out = self.run_checker(dockerfile=bad)
         self.assertNotEqual(code, 0, out)
         self.assertIn("pin a concrete version", out)

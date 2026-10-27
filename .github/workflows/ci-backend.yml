@@ -101,7 +101,7 @@ on:
         description: golangci-lint version passed to golangci-lint-action.
         type: string
         required: false
-        default: v2.14.0
+        default: v2.15.0
       golangci-lint-args:
         description: Extra arguments for the Linux golangci-lint run.
         type: string
