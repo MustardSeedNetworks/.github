@@ -98,7 +98,7 @@ jobs:
       - name: Install libpcap-dev
         if: ${{ inputs.install-libpcap }}
         uses: MustardSeedNetworks/.github/.github/actions/apt-install@0bc6492eca8eee28f85af11187fd54b28bd85fe0 # 0bc6492
-        timeout-minutes: 10
+        timeout-minutes: 22
         with:
           packages: libpcap-dev
 
