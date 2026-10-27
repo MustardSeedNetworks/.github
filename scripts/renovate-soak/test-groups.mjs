@@ -93,6 +93,16 @@ if (checkout.groupName !== 'github actions') {
   fail(`actions/checkout grouped as ${JSON.stringify(checkout.groupName)}, not "github actions"`)
 }
 
+for (const update of [
+  { manager: 'npm', depName: '@playwright/test', datasource: 'npm' },
+  { manager: 'regex', depName: 'mcr.microsoft.com/playwright', datasource: 'docker' },
+]) {
+  const pw = await effective({ ...update, packageName: update.depName, updateType: 'patch' })
+  if (pw.groupName !== 'frontend toolchain') {
+    fail(`${update.depName} grouped as ${JSON.stringify(pw.groupName)}, not "frontend toolchain"`)
+  }
+}
+
 const { config: generate } = await resolveConfigPresets(
   JSON.parse(readFileSync(resolve(root, 'presets/post-upgrade-generate.json'), 'utf8')),
 )
