@@ -98,9 +98,23 @@ runs:
       #     it before retrying.
       #
       # A composite step cannot carry `timeout-minutes`, so callers must keep a
-      # step-level timeout as the outer backstop, and it has to exceed
-      # attempts x command-timeout or it will pre-empt the lock wait it is
-      # meant to protect.
+      # step-level timeout as the outer backstop, and it has to cover the
+      # worst case below or it pre-empts the second attempt it exists to allow
+      # (MustardSeedNetworks/.github#217). With the defaults (command-timeout
+      # 270, 15 s timeout -k grace, retry-delay 10, 120 s orphan grace + 5 s
+      # TERM->KILL wait):
+      #   - `command` path, one attempt is one timeout (285 s); every failed
+      #     attempt then runs clear_lock_holder (up to 130 s), because the
+      #     orphan survives the wrapper kill. Two attempts:
+      #     285 + 130 + 10 + 285 = 710 s, so 13 minutes.
+      #   - `packages` path, apt-get update and apt-get install each get a full
+      #     timeout (570 s per attempt). sudo sits outside timeout, so orphans
+      #     are rare, but the budget still has to hold: 570 + 130 + 10 + 570 =
+      #     1280 s, so 22 minutes.
+      # In general: attempts x (timeouts per attempt x (command-timeout + 15))
+      # + (attempts - 1) x (lock-holder wait 130 + attempt x retry-delay).
+      # Raise the caller's step timeout whenever command-timeout, attempts or
+      # retry-delay-seconds is raised.
       run: |
         set -uo pipefail
 
