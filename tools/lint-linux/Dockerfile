@@ -12,7 +12,7 @@
 # rule -- and a stale Go base reports stdlib-named errors that look like
 # code defects but are toolchain skew. Bump LINT_LINUX_TAG in the consuming
 # repo whenever either changes, so a rebuild is actually picked up.
-FROM golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+FROM golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 
 ARG GOLANGCI_VERSION=v2.15.0
 
