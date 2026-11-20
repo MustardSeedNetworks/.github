@@ -1,0 +1,164 @@
+# Scheduled vulnerability scan of every Go repository's main branch.
+#
+# The per-PR Security Scanning gates (govulncheck + Trivy in each repo's
+# ci.yml) only run when a PR does. A vulnerability published while nothing
+# is merging stays invisible until the next PR, which then fails for a reason
+# it did not introduce. On 2026-11-19 that blocked every niac-go PR at once
+# (GO-2026-6859 in net/http, CVE-2026-78661 in golang.org/x/net) with no
+# driver running to notice. This workflow scans main daily and keeps one
+# tracking issue in .github up to date, so a new advisory shows up as an
+# issue before it shows up as a wall of red PRs.
+#
+# Same token model as ci-conformance-schedule.yml: the msn-ci-bot App token,
+# scoped per repository with contents: read, checks the product repo out;
+# the tracking issue lives in this repository and is written with
+# GITHUB_TOKEN under the report job's `issues: write`.
+#
+# The checks mirror the per-PR gate, so the schedule and the PR gate agree on
+# what "red" means: govulncheck on reachability, Trivy filesystem scan failing
+# on CRITICAL/HIGH.
+name: Security scan (scheduled)
+
+on:
+  schedule:
+    # Daily, off the hour, clear of ci-conformance-schedule (06:17).
+    - cron: '41 5 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  TRACKING_ISSUE_TITLE: "Scheduled security scan: vulnerabilities on main"
+
+jobs:
+  scan:
+    name: Scan ${{ matrix.repo }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        repo: [seed, stem, niac-go, trellis, foundation]
+    steps:
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: MustardSeedNetworks
+          repositories: ${{ matrix.repo }}
+          permission-contents: read
+
+      - name: Check out ${{ matrix.repo }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MustardSeedNetworks/${{ matrix.repo }}
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+          path: target
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: target/go.mod
+          cache: false
+
+      # seed and niac-go bind libpcap through cgo; govulncheck has to load
+      # those packages to trace reachability.
+      - name: Install libpcap headers
+        uses: MustardSeedNetworks/.github/.github/actions/apt-install@0bc6492eca8eee28f85af11187fd54b28bd85fe0 # 0bc6492
+        with:
+          packages: libpcap-dev
+
+      # Repos that declare govulncheck as a go.mod tool run that version, the
+      # one their own `make security` uses. The rest run the same release.
+      - name: govulncheck
+        id: govulncheck
+        continue-on-error: true
+        working-directory: target
+        run: |
+          if go tool -n govulncheck >/dev/null 2>&1; then
+            go tool govulncheck ./...
+          else
+            go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+          fi
+
+      - name: Trivy (CRITICAL/HIGH)
+        id: trivy
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: target
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+
+      - name: Fail if either scan found something
+        if: steps.govulncheck.outcome == 'failure' || steps.trivy.outcome == 'failure'
+        env:
+          REPO: ${{ matrix.repo }}
+          GOVULN: ${{ steps.govulncheck.outcome }}
+          TRIVY: ${{ steps.trivy.outcome }}
+        run: |
+          echo "### ${REPO}: govulncheck ${GOVULN}, Trivy ${TRIVY}" >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::${REPO}: govulncheck ${GOVULN}, Trivy ${TRIVY}"
+          exit 1
+
+  report:
+    name: Tracking issue
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - name: Find failed repositories
+        id: results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          failed="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json jobs \
+            --jq '[.jobs[] | select(.name | startswith("Scan ")) | select(.conclusion == "failure") | .name | ltrimstr("Scan ")] | join(" ")')"
+          echo "failed_repos=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED_REPOS: ${{ steps.results.outputs.failed_repos }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title \"${TRACKING_ISSUE_TITLE}\"" \
+            --json number --jq '.[0].number')"
+
+          if [ -z "$FAILED_REPOS" ]; then
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --repo "$GITHUB_REPOSITORY" \
+                --comment "Clean on every repository's main: ${RUN_URL}"
+            fi
+            exit 0
+          fi
+
+          body="Vulnerabilities on main in: **${FAILED_REPOS}**
+
+          Run log (per-repo govulncheck and Trivy output): ${RUN_URL}
+
+          Every PR to those repositories fails Security Scanning until main is
+          fixed. A later clean run closes this issue; a later failing run
+          comments here instead of opening a duplicate."
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "$TRACKING_ISSUE_TITLE" --body "$body"
+          fi
+          echo "::error::Vulnerabilities on main in: ${FAILED_REPOS}"
+          exit 1
