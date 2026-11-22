@@ -85,4 +85,13 @@ describe('SettingsTabs', () => {
     render(<Harness />);
     expect(screen.getByTestId('icon').parentElement?.getAttribute('aria-hidden')).toBe('true');
   });
+
+  it('keeps the strip pinned on its own, with a background and no dependence on the container padding', () => {
+    render(<Harness />);
+    const strip = screen.getByRole('tablist').parentElement?.parentElement;
+    expect(strip?.className).toContain('sticky');
+    expect(strip?.className).toContain('top-0');
+    expect(strip?.className).toContain('bg-surface-raised');
+    expect(strip?.className).not.toMatch(/(^|\s)-(m|mx|mt|top)-/);
+  });
 });

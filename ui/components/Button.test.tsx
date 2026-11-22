@@ -66,4 +66,57 @@ describe('Button', () => {
     expect(onClick).toHaveBeenCalledOnce();
     expect(screen.getByTestId('icon').parentElement?.getAttribute('aria-hidden')).toBe('true');
   });
+
+  it('styles ghost as borderless with no fill until hovered', () => {
+    render(<Button variant="ghost">More</Button>);
+    const { className } = screen.getByRole('button', { name: 'More' });
+    expect(className).toContain('border-transparent');
+    expect(className).toContain('bg-transparent');
+    expect(className).toContain('hover:bg-surface-hover');
+  });
+
+  describe('loading', () => {
+    it('shows a spinner, disables the button and marks it busy, keeping the label', () => {
+      const onClick = vi.fn();
+      render(
+        <Button variant="primary" loading onClick={onClick} icon={<svg data-testid="icon" />}>
+          Save
+        </Button>,
+      );
+      const button = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(button.getAttribute('aria-busy')).toBe('true');
+      expect(button.querySelector('svg.lucide-loader-circle')).toBeTruthy();
+      expect(screen.queryByTestId('icon')).toBeNull();
+      fireEvent.click(button);
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it('is not busy when not loading', () => {
+      render(<Button>Go</Button>);
+      expect(screen.getByRole('button').getAttribute('aria-busy')).toBeNull();
+    });
+  });
+
+  describe('icon only', () => {
+    it('is a square button named by its aria-label, with the icon hidden', () => {
+      render(<Button iconOnly icon={<svg data-testid="icon" />} aria-label="Delete device" />);
+      const button = screen.getByRole('button', { name: 'Delete device' });
+      expect(button.className).toContain('h-10');
+      expect(button.className).toContain('w-10');
+      expect(button.textContent).toBe('');
+      expect(screen.getByTestId('icon').parentElement?.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('is smaller at size sm', () => {
+      render(<Button iconOnly size="sm" icon={<svg />} aria-label="Close" />);
+      expect(screen.getByRole('button', { name: 'Close' }).className).toContain('h-8');
+    });
+
+    it('cannot be written without an aria-label', () => {
+      // @ts-expect-error an icon-only button must carry an aria-label
+      const missing = <Button iconOnly icon={<svg />} />;
+      expect(missing).toBeTruthy();
+    });
+  });
 });

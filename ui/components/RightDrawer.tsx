@@ -4,18 +4,18 @@
  * screen at 390px. (Help was a centred modal in seed and a drawer in stem and
  * niac; the owner settled on the drawer, 2026-11-22.)
  *
- * Based on the focus handling in stem's and niac's drawers, with their
- * `useFocusTrap` hook folded in so this file has no product imports:
- * it moves focus in on open, keeps Tab inside, closes on Escape or a click on
- * the scrim, and puts focus back where it was on close. The page behind is
+ * Based on the focus handling in stem's and niac's drawers (see `useDialog`):
+ * focus moves in on open, Tab stays inside, Escape or a click on the scrim
+ * closes it, and focus goes back where it was on close. The page behind is
  * locked from scrolling while it is open.
  *
  * The body scrolls; the header (title and close) and the optional footer stay
  * put. The dialog is mounted only while open.
  */
 import { X } from 'lucide-react';
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef } from 'react';
+import { type ReactNode, useId } from 'react';
 import { cx } from './cx';
+import { useDialog } from './useDialog';
 
 export interface RightDrawerProps {
   open: boolean;
@@ -31,9 +31,6 @@ export interface RightDrawerProps {
   'data-testid'?: string;
 }
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 export function RightDrawer({
   open,
   onClose,
@@ -45,51 +42,11 @@ export function RightDrawer({
   'data-testid': testId = 'right-drawer',
 }: RightDrawerProps) {
   const titleId = useId();
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-    const { current: panel } = panelRef;
-    (panel?.querySelector<HTMLElement>(FOCUSABLE) ?? panel)?.focus();
-    return () => {
-      document.body.style.overflow = overflow;
-      opener?.focus();
-    };
-  }, [open]);
+  const { panelRef, onKeyDown } = useDialog(open, onClose);
 
   if (!open) {
     return null;
   }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if (event.key !== 'Tab') {
-      return;
-    }
-    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE));
-    const [first] = focusable;
-    const last = focusable.at(-1);
-    if (!first || !last) {
-      event.preventDefault();
-      return;
-    }
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">

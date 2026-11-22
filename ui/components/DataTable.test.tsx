@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataTable, type DataTableColumn, type DataTableLabels } from './DataTable';
 
 afterEach(cleanup);
@@ -32,6 +32,7 @@ const labels: DataTableLabels<Device> = {
   selectAll: 'Select all',
   selectRow: (d) => `Select ${d.name}`,
   actions: 'Actions',
+  loading: 'Loading devices',
   pagination: 'Pages',
   previousPage: 'Previous page',
   nextPage: 'Next page',
@@ -184,5 +185,127 @@ describe('DataTable', () => {
     const [header, firstRow] = screen.getAllByRole('row');
     expect(header?.className).toContain('h-10');
     expect(firstRow?.className).toContain('h-11');
+  });
+
+  describe('row click', () => {
+    it('activates a row on click and on Enter or Space when the row itself has focus', () => {
+      const onRowClick = vi.fn();
+      render(table({ onRowClick }));
+      const row = screen.getByRole('row', { name: /core/ });
+      expect(row.getAttribute('tabindex')).toBe('0');
+      fireEvent.click(row);
+      fireEvent.keyDown(row, { key: 'Enter' });
+      fireEvent.keyDown(row, { key: ' ' });
+      fireEvent.keyDown(row, { key: 'a' });
+      expect(onRowClick).toHaveBeenCalledTimes(3);
+      expect(onRowClick).toHaveBeenCalledWith(devices[0]);
+    });
+
+    it('leaves rows out of the tab order without onRowClick', () => {
+      render(table());
+      expect(screen.getByRole('row', { name: /core/ }).getAttribute('tabindex')).toBeNull();
+    });
+
+    it('does not fire from a row action or a checkbox inside the row', () => {
+      const onRowClick = vi.fn();
+      render(
+        table({
+          onRowClick,
+          selection: { selectedKeys: new Set(), onChange: () => {} },
+          rowActions: (d) => <button type="button">{`Edit ${d.name}`}</button>,
+        }),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Edit core' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select core' }));
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Edit core' }), { key: 'Enter' });
+      expect(onRowClick).not.toHaveBeenCalled();
+    });
+
+    it('marks only the selected row aria-selected', () => {
+      render(table({ onRowClick: () => {}, selectedRowKey: 'b' }));
+      const flags = screen
+        .getAllByRole('row')
+        .slice(1)
+        .map((r) => r.getAttribute('aria-selected'));
+      expect(flags).toEqual(['false', 'true', 'false']);
+    });
+  });
+
+  describe('loading', () => {
+    it('shows skeleton rows under the real header, busy, with a status line', () => {
+      render(table({ loading: true }));
+      expect(screen.getAllByTestId('data-table-skeleton-row')).toHaveLength(5);
+      expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+        'Name',
+        'Ports',
+      ]);
+      expect(screen.getByRole('table').getAttribute('aria-busy')).toBe('true');
+      expect(screen.getByRole('status').textContent).toBe('Loading devices');
+      expect(screen.queryByText('core')).toBeNull();
+    });
+
+    it('shows skeletons rather than the empty state while loading with no rows yet', () => {
+      render(table({ rows: [], loading: true }));
+      expect(screen.queryByText('none')).toBeNull();
+      expect(screen.getAllByTestId('data-table-skeleton-row').length).toBeGreaterThan(0);
+    });
+
+    it('hides the pager while loading', () => {
+      const many = Array.from({ length: 7 }, (_, i) => ({ id: `${i}`, name: `d${i}`, ports: i }));
+      render(table({ rows: many, pageSize: 3, loading: true }));
+      expect(screen.queryByRole('navigation', { name: 'Pages' })).toBeNull();
+    });
+  });
+
+  describe('sticky header', () => {
+    it('pins the header and bounds the scroller when maxHeight is set', () => {
+      render(table({ maxHeight: 300 }));
+      const scroller = screen.getByRole('table').parentElement;
+      expect(scroller?.style.maxHeight).toBe('300px');
+      expect(scroller?.className).toContain('overflow-y-auto');
+      expect(screen.getAllByRole('rowgroup')[0]?.className).toContain('sticky');
+    });
+
+    it('does not pin or bound anything by default', () => {
+      render(table());
+      expect(screen.getAllByRole('rowgroup')[0]?.className).not.toContain('sticky');
+      expect(screen.getByRole('table').parentElement?.style.maxHeight).toBe('');
+    });
+  });
+
+  describe('virtualization', () => {
+    const big = Array.from({ length: 500 }, (_, i) => ({ id: `${i}`, name: `d${i}`, ports: i }));
+    const dataRows = () =>
+      screen
+        .getAllByRole('row')
+        .filter((r) => r.hasAttribute('aria-rowindex') && r.getAttribute('aria-rowindex') !== '1');
+
+    it('mounts only a window of rows and no pager', () => {
+      render(table({ rows: big, virtualize: {}, maxHeight: 440 }));
+      expect(dataRows().length).toBeLessThan(30);
+      expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBe('501');
+      expect(screen.queryByRole('navigation', { name: 'Pages' })).toBeNull();
+      expect(screen.getByText('d0')).toBeTruthy();
+      expect(screen.queryByText('d400')).toBeNull();
+    });
+
+    it('slides the window with the scroll offset and pads the rest with spacers', () => {
+      render(table({ rows: big, virtualize: {}, maxHeight: 440 }));
+      const scroller = screen.getByRole('table').parentElement as HTMLElement;
+      scroller.scrollTop = 44 * 300;
+      fireEvent.scroll(scroller);
+      expect(screen.queryByText('d0')).toBeNull();
+      expect(screen.getByText('d300')).toBeTruthy();
+      const [first] = dataRows();
+      expect(first?.getAttribute('aria-rowindex')).toBe(String(295 + 2));
+      const spacers = screen.getByRole('table').querySelectorAll('td[aria-hidden="true"]');
+      expect(spacers).toHaveLength(2);
+    });
+
+    it('stays a plain paged table below the threshold', () => {
+      render(table({ virtualize: { threshold: 100 }, pageSize: 2 }));
+      expect(screen.getByRole('navigation', { name: 'Pages' })).toBeTruthy();
+      expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBeNull();
+    });
   });
 });

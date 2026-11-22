@@ -8,7 +8,9 @@
  * The popup's own colours follow `color-scheme`, which the shared theme sets
  * per mode.
  *
- * Pair it with a FormField, which supplies `id` and the aria props.
+ * It reports changes through `onValueChange(value)` only; the native `onChange`
+ * is not exposed, so there is one way to listen. Pair it with a FormField,
+ * which supplies `id` and the aria props.
  */
 import { ChevronDown } from 'lucide-react';
 import type { Ref, SelectHTMLAttributes } from 'react';
@@ -20,14 +22,24 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
-export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children'> {
+export interface SelectProps
+  extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children' | 'onChange'> {
   options: readonly SelectOption[];
+  /** The one change callback: the chosen option's value, as seed's callers pass it. */
+  onValueChange?: (value: string) => void;
   /** A disabled first option shown while nothing is chosen. */
   placeholder?: string;
   ref?: Ref<HTMLSelectElement>;
 }
 
-export function Select({ options, placeholder, className, ref, ...rest }: SelectProps) {
+export function Select({
+  options,
+  placeholder,
+  onValueChange,
+  className,
+  ref,
+  ...rest
+}: SelectProps) {
   return (
     <div className="relative w-full">
       <select
@@ -36,6 +48,7 @@ export function Select({ options, placeholder, className, ref, ...rest }: Select
           'min-h-10 w-full min-w-0 appearance-none truncate rounded-lg border border-surface-border bg-surface-raised py-2 pl-3 pr-9 text-sm text-text-primary hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-text-disabled aria-[invalid=true]:border-status-error',
           className,
         )}
+        onChange={(event) => onValueChange?.(event.target.value)}
         {...rest}
       >
         {placeholder ? (

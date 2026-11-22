@@ -58,16 +58,24 @@ router seam is `renderLink`, which a product points at its own `Link`.
 | `PageHeader` | The one title block every page opens with: breadcrumbs, kicker, title, optional subtitle, readout, actions, inline help button. | seed `PageHeader` |
 | `Breadcrumbs` | The trail above a header. `PageHeader` renders it; use directly only outside a page. | seed `PageHeader` (inner crumbs), a11y of seed `Breadcrumbs` |
 | `EmptyState` | Nothing to show: icon, title, hint, one action. Neutral. | stem `ModuleEmptyState` |
-| `DataTable` | Every table: sort, pagination, select-all, row actions, contained scroll. | niac `DataTable` |
+| `DataTable` | Every table: sort, pagination, select-all, row actions, row click, skeleton loading, optional sticky header and virtualization, contained scroll. | niac `DataTable`, `useVirtualScroll` |
 | `Card` | A block of page content. Flat, one radius, one border. | the shared `.panel` class |
 | `RightDrawer` | The one side panel. Help and Settings render inside it. | stem and niac drawers' focus handling |
 | `SettingsTabs` | Settings sections inside a `RightDrawer`. | niac `SettingsDrawer` tabs |
 | `Toggle` | An on/off setting. | stem `Toggle`, track reworked |
-| `Select` | A choice from a short list. Native, themed. | seed `Select` |
-| `Button` | `primary`, `secondary`, `destructive`, plus a disabled look. | niac `Button`, variants cut to three |
+| `Select` | A choice from a short list. Native, themed; `onValueChange(value)`. | seed `Select` |
+| `Button` | `primary`, `secondary`, `ghost`, `destructive`, `loading`, icon-only (needs an `aria-label`), plus a disabled look. | niac `Button`, `IconButton` |
 | `StatusPill` | A verdict in the status colours. | niac `StatusBadge` |
 | `CategoryChip` | A neutral category label (device type, protocol, role). | new, from the audit |
 | `FormField` | A label, one control, hint and error, capped width. | niac `FormField` |
+| `Input`, `Textarea`, `Checkbox` | Text, multi-line and tick controls, themed. Inside a `FormField`. | seed, stem, niac `Input`, `Textarea`, `Checkbox` |
+| `SearchInput` | A filter box for a list or table. | seed, stem, niac `SearchInput` |
+| `SegmentedControl` | One of two to five options that change a view in place. | niac and trellis `aria-pressed` groups |
+| `CollapsibleSection` | A foldable block (advanced options). | seed, stem, niac `CollapsibleSection` |
+| `Alert` | An inline message in a status tone. | seed, stem, niac `Alert` |
+| `Tooltip` | Short text on hover and focus for an icon control. | all four `Tooltip`s |
+| `Modal`, `ConfirmDialog`, `InputModal` | A short blocking task, the confirmation every destructive action gets, a one-field prompt. | seed, stem, niac `Modal`, `ConfirmModal`, `InputModal` |
+| `Skeleton` | A loading placeholder bar. | seed and niac `Skeleton` |
 
 `Help` and `Settings` content stay in the products; only the frame and the tabs
 are shared. The theme store (OS default, persisted 3-way toggle in Settings plus
@@ -97,12 +105,15 @@ running" (stem) where an `EmptyState` belongs; if a region has nothing to show
 and nothing to do, drop the region.
 
 **Tables.** One `DataTable`, not a CSS-grid list or a stack of buttons. Never let
-a table widen the page: the scroll lives inside the frame at 390px. Do not fake
-server paging by passing one page of rows; that is a different component.
+a table widen the page: the scroll lives inside the frame at 390px. Show
+`loading` with skeleton rows, not a bare "Loading". Use `virtualize` only for
+hundreds of rows (rows then must stay one height). Do not fake server paging by
+passing one page of rows; that is a different component.
 
 **Buttons.** At most one `primary` per page. Every destructive action is the
-filled `destructive` variant, never an outlined or text-only red, and is paired
-with a confirmation. Disabled is visibly disabled; say why in a `title` or the
+filled `destructive` variant, never an outlined or text-only red, and goes
+through a `ConfirmDialog`. An icon-only button needs an `aria-label` (the type
+enforces it); put a `Tooltip` on it. Use `loading` for an action in flight. Disabled is visibly disabled; say why in a `title` or the
 copy around it.
 
 **Status versus category.** The status hues mean success, warning, error, info
@@ -112,8 +123,9 @@ is a `CategoryChip`; niac's device-type pills used status colours for categories
 
 **Forms.** Wrap every control in a `FormField`: it generates the id and wires the
 label, hint and error. Fields are capped at 28rem (`lg` is 42rem); there is no
-full-width option. Use `Select`, not a bare `<select>`, so the face and
-chevron are themed. Use `Toggle`, not a bare checkbox, for on/off settings.
+full-width option. Use `Select` (it reports `onValueChange(value)`, one way to
+listen), not a bare `<select>`, so the face and chevron are themed; `Input`,
+`Textarea` and `Checkbox` likewise. Use `Toggle`, not a bare checkbox, for on/off settings.
 
 **Drawers.** Help and Settings are a right-hand `RightDrawer` in all four
 products (owner, 2026-11-22), full width at 390px. Settings is `SettingsTabs`
@@ -139,18 +151,22 @@ spacing helpers and type classes from a product's own `index.css` (`gap-tight`,
 status-hue text colour on a status-hue wash (use `-strong`).
 `tests/vocabulary.test.ts` enforces this on every component.
 
-## What it does not do (yet)
+## What it does not cover
 
-Left out on purpose, so the first adopter knows what to ask for:
+Found by reading all four products for what phase 2 would need. Not here, so a
+product keeps its own until two products need it:
 
-- `DataTable` has no virtual scrolling, row click, loading state or sticky
-  header. niac's `DeviceTable` uses virtualization and its `ConversationList` and
-  `PcapPacketList` use row click, so those need an upstream change before they
-  migrate; a local fork is not an option, since the copy is hash-locked.
-- `Button` has no loading state, ghost or icon-only variant, and no permission
-  hook (niac's `action`); a product wraps it.
-- `Select` reports the native change event; seed's `onChange(value)` callers
-  adapt.
+- `Combobox` (seed only), `Slider` (seed only), `InfoPopover` (niac only).
+- niac's permission `action` on `Button`, `RequireScope` and the other gates:
+  a product decides at the call site whether to render or disable a button.
+- seed's and niac's `Tag`: use `StatusPill` when it states a verdict and
+  `CategoryChip` when it names a category. Tag's colour schemes are what the
+  audit found misused.
+- `Toast`, `CommandPalette`, `Sidebar`, `StatusRollup`: the shell, already
+  matched.
+- `Tooltip` is positioned, not portalled, so an `overflow-hidden` ancestor clips
+  it, and it does not wrap a disabled button (explain a disabled action in a
+  `title` or the copy around it).
 
 ## Tests travel with the components
 

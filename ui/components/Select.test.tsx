@@ -27,7 +27,7 @@ describe('Select', () => {
     expect(first.disabled).toBe(true);
   });
 
-  it('reports a change through the native event', () => {
+  it('reports the chosen value through onValueChange', () => {
     const onChange = vi.fn();
     render(
       <Select
@@ -35,11 +35,11 @@ describe('Select', () => {
         options={options}
         defaultValue=""
         placeholder="Choose"
-        onChange={onChange}
+        onValueChange={onChange}
       />,
     );
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en0' } });
-    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('en0');
   });
 
   it('is themed from tokens, not left to the browser', () => {

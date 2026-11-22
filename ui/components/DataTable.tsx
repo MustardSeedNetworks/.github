@@ -4,10 +4,19 @@
  * actions, and a pager.
  *
  * Based on niac's DataTable (typed columns that own their cells, a sort that
- * cycles ascending, descending, off, and select-all) with its virtual
- * scrolling, loading branch and row-click removed, and pagination, `aria-sort`
- * and the contained scroll added. seed's table, stem's list and niac's CSS-grid
- * device list all give way to this.
+ * cycles ascending, descending, off, select-all, virtual scrolling, row click),
+ * with pagination, `aria-sort`, skeleton loading and the contained scroll
+ * added. seed's table, stem's list and niac's CSS-grid device list all give way
+ * to this.
+ *
+ * - Row click: `onRowClick` makes rows focusable; Enter or Space on a focused
+ *   row activates it. `selectedRowKey` marks the open row with `aria-selected`.
+ * - Virtualization: `virtualize` mounts only the rows near the viewport for
+ *   very long lists (niac's device list runs to 543). It shows every row in a
+ *   bounded scroller instead of paging, and rows must stay one height.
+ * - Sticky header: `maxHeight` bounds the table vertically and pins the header.
+ * - Loading: `loading` shows skeleton rows under the real header, with
+ *   `aria-busy` and a status line, never a bare "Loading...".
  *
  * At 390px the table scrolls sideways inside its own frame, never the page,
  * and says so with `data-phone-width-exempt`, which the fleet's phone-width
@@ -21,8 +30,10 @@
  * page of rows and a `pageSize` that hides the pager.
  */
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { cx } from './cx';
+import { Skeleton } from './Skeleton';
+import { useVirtualWindow } from './useVirtualWindow';
 
 export interface DataTableColumn<T> {
   /** Stable id, also the sort key. */
@@ -50,6 +61,8 @@ export interface DataTableLabels<T> {
   pagination: string;
   previousPage: string;
   nextPage: string;
+  /** Status line while loading, e.g. "Loading devices". */
+  loading: string;
   /** e.g. "Page 2 of 5 (113 rows)". */
   pageStatus: (page: number, pageCount: number, total: number) => string;
 }
@@ -67,6 +80,21 @@ export interface DataTableProps<T> {
   /** Rows per page. The pager appears only when there is more than one page. */
   pageSize?: number;
   selection?: DataTableSelection;
+  /** Makes rows activatable from the mouse and from Enter or Space. */
+  onRowClick?: (row: T) => void;
+  /** The row marked `aria-selected`, e.g. the one whose detail is open. */
+  selectedRowKey?: string;
+  /** Shows skeleton rows instead of `rows` and `empty`. */
+  loading?: boolean;
+  /** Bounds the table's height in px and pins the header while the body scrolls. */
+  maxHeight?: number;
+  /**
+   * Mounts only the rows near the viewport once there are `threshold` rows
+   * (default 100). Needs rows of one height (`rowHeight`, default 44, the
+   * standard row) and shows every row in a scroller bounded by `maxHeight`
+   * (default 480) instead of paging.
+   */
+  virtualize?: { threshold?: number; rowHeight?: number };
   /** The last column: one to three icon buttons or a menu. */
   rowActions?: (row: T) => ReactNode;
   'data-testid'?: string;
@@ -75,6 +103,10 @@ export interface DataTableProps<T> {
 type SortState = { key: string; direction: 'asc' | 'desc' } | null;
 
 const DEFAULT_PAGE_SIZE = 25;
+const SKELETON_ROW_KEYS = ['one', 'two', 'three', 'four', 'five'] as const;
+const DEFAULT_VIRTUAL_THRESHOLD = 100;
+const DEFAULT_ROW_HEIGHT = 44;
+const DEFAULT_VIRTUAL_HEIGHT = 480;
 
 function compare(a: string | number, b: string | number): number {
   return typeof a === 'number' && typeof b === 'number'
@@ -112,6 +144,11 @@ export function DataTable<T>({
   defaultSort,
   pageSize = DEFAULT_PAGE_SIZE,
   selection,
+  onRowClick,
+  selectedRowKey,
+  loading = false,
+  maxHeight,
+  virtualize,
   rowActions,
   'data-testid': testId,
 }: DataTableProps<T>) {
@@ -130,7 +167,14 @@ export function DataTable<T>({
 
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const page = Math.min(requestedPage, pageCount);
-  const pageRows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
+  const virtual =
+    virtualize !== undefined && rows.length >= (virtualize.threshold ?? DEFAULT_VIRTUAL_THRESHOLD);
+  const rowHeight = virtualize?.rowHeight ?? DEFAULT_ROW_HEIGHT;
+  const viewportHeight = maxHeight ?? DEFAULT_VIRTUAL_HEIGHT;
+  const rowWindow = useVirtualWindow({ count: sortedRows.length, rowHeight, viewportHeight });
+  const pageRows = virtual
+    ? sortedRows.slice(rowWindow.start, rowWindow.end)
+    : sortedRows.slice((page - 1) * pageSize, page * pageSize);
 
   const pageKeys = pageRows.map(getRowKey);
   const selectedOnPage = selection ? pageKeys.filter((key) => selection.selectedKeys.has(key)) : [];
@@ -142,7 +186,7 @@ export function DataTable<T>({
     }
   }, [selectedOnPage.length, allSelected]);
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && !loading) {
     return <div data-testid={testId}>{empty}</div>;
   }
 
@@ -182,12 +226,43 @@ export function DataTable<T>({
     selection.onChange(next);
   };
 
+  const activate = (row: T) => (event: KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      onRowClick?.(row);
+    }
+  };
+
+  const bounded = maxHeight !== undefined || virtual;
+  const cellKeys = [
+    ...(selection ? ['select'] : []),
+    ...columns.map((column) => column.key),
+    ...(rowActions ? ['actions'] : []),
+  ];
+  const columnCount = cellKeys.length;
+  const spacerAbove = virtual ? rowWindow.start * rowHeight : 0;
+  const spacerBelow = virtual ? (sortedRows.length - rowWindow.end) * rowHeight : 0;
+
   return (
     <div className="panel min-w-0 overflow-hidden" data-testid={testId}>
-      <div className="overflow-x-auto" data-phone-width-exempt="table-scroll">
-        <table className="w-full min-w-max text-sm">
+      <div
+        className={cx('overflow-x-auto', bounded && 'overflow-y-auto')}
+        style={bounded ? { maxHeight: viewportHeight } : undefined}
+        onScroll={virtual ? rowWindow.onScroll : undefined}
+        data-phone-width-exempt="table-scroll"
+      >
+        <table
+          className="w-full min-w-max text-sm"
+          aria-busy={loading || undefined}
+          aria-rowcount={virtual ? sortedRows.length + 1 : undefined}
+        >
           <caption className="sr-only">{caption}</caption>
-          <thead className="bg-surface-sunken text-xs uppercase tracking-wide text-text-muted">
+          <thead
+            className={cx(
+              'bg-surface-sunken text-xs uppercase tracking-wide text-text-muted',
+              bounded && 'sticky top-0 z-10',
+            )}
+          >
             <tr className="h-10">
               {selection ? (
                 <th scope="col" className={cx(cellPad, 'w-10 text-left')}>
@@ -196,6 +271,7 @@ export function DataTable<T>({
                     type="checkbox"
                     checked={allSelected}
                     onChange={toggleAll}
+                    disabled={loading}
                     aria-label={labels.selectAll}
                     className={checkboxClass}
                   />
@@ -240,46 +316,100 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody className="divide-y divide-hairline text-text-secondary">
-            {pageRows.map((row) => {
-              const key = getRowKey(row);
-              const selected = selection?.selectedKeys.has(key) ?? false;
-              return (
-                <tr
-                  key={key}
-                  aria-selected={selection ? selected : undefined}
-                  className={cx('h-11 hover:bg-surface-hover', selected && 'bg-surface-hover')}
-                >
-                  {selection ? (
-                    <td className={cellPad}>
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleRow(key)}
-                        aria-label={labels.selectRow(row)}
-                        className={checkboxClass}
-                      />
-                    </td>
-                  ) : null}
-                  {columns.map((column) => (
-                    <td
-                      key={column.key}
-                      className={cx(cellPad, column.align === 'right' && 'text-right')}
+            {loading
+              ? SKELETON_ROW_KEYS.slice(0, pageSize).map((rowKey) => (
+                  <tr key={rowKey} className="h-11" data-testid="data-table-skeleton-row">
+                    {cellKeys.map((cellKey, position) => (
+                      <td key={cellKey} className={cellPad}>
+                        <Skeleton className={position === 0 ? 'w-3/4' : 'w-1/2'} />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              : null}
+            {!loading && spacerAbove > 0 ? (
+              <tr>
+                <td
+                  aria-hidden="true"
+                  colSpan={columnCount}
+                  style={{ height: spacerAbove, padding: 0 }}
+                />
+              </tr>
+            ) : null}
+            {loading
+              ? null
+              : pageRows.map((row, offset) => {
+                  const key = getRowKey(row);
+                  const checked = selection?.selectedKeys.has(key) ?? false;
+                  const current = key === selectedRowKey;
+                  const selected = checked || current;
+                  return (
+                    <tr
+                      key={key}
+                      aria-selected={
+                        selection || selectedRowKey !== undefined ? selected : undefined
+                      }
+                      aria-rowindex={virtual ? rowWindow.start + offset + 2 : undefined}
+                      tabIndex={onRowClick ? 0 : undefined}
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}
+                      onKeyDown={onRowClick ? activate(row) : undefined}
+                      className={cx(
+                        'h-11 hover:bg-surface-hover',
+                        selected && 'bg-surface-hover',
+                        onRowClick &&
+                          'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-primary',
+                      )}
                     >
-                      {column.cell(row)}
-                    </td>
-                  ))}
-                  {rowActions ? (
-                    <td className={cx(cellPad, 'text-right')}>
-                      <div className="inline-flex items-center gap-1">{rowActions(row)}</div>
-                    </td>
-                  ) : null}
-                </tr>
-              );
-            })}
+                      {selection ? (
+                        <td className={cellPad}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleRow(key)}
+                            onClick={(event) => event.stopPropagation()}
+                            aria-label={labels.selectRow(row)}
+                            className={checkboxClass}
+                          />
+                        </td>
+                      ) : null}
+                      {columns.map((column) => (
+                        <td
+                          key={column.key}
+                          className={cx(cellPad, column.align === 'right' && 'text-right')}
+                        >
+                          {column.cell(row)}
+                        </td>
+                      ))}
+                      {rowActions ? (
+                        <td
+                          className={cx(cellPad, 'text-right')}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <div className="inline-flex items-center gap-1">{rowActions(row)}</div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+            {!loading && spacerBelow > 0 ? (
+              <tr>
+                <td
+                  aria-hidden="true"
+                  colSpan={columnCount}
+                  style={{ height: spacerBelow, padding: 0 }}
+                />
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
-      {pageCount > 1 ? (
+      {loading ? (
+        <p role="status" className="sr-only">
+          {labels.loading}
+        </p>
+      ) : null}
+      {pageCount > 1 && !virtual && !loading ? (
         <nav
           aria-label={labels.pagination}
           className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline px-4 py-2 text-xs text-text-muted"

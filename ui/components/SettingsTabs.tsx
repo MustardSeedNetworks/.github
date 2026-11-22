@@ -11,9 +11,11 @@
  * active tab is in the Tab order.
  *
  * Pass the active panel's content as `children`; the caller picks it from
- * `value`, so only one panel is mounted. Inside a RightDrawer the strip sticks
- * to the top of the scrolling body (the negative margins cancel the body's
- * padding), so the tabs stay reachable while a long panel scrolls.
+ * `value`, so only one panel is mounted. The strip is self-contained: it
+ * sticks to the top of whatever scrolls it, with its own background, and
+ * assumes nothing about the container's padding. Inside a RightDrawer the body
+ * is padded, so the strip sits inset with the content and the panel scrolls
+ * under it.
  */
 import { type KeyboardEvent, type ReactNode, useId, useRef } from 'react';
 import { cx } from './cx';
@@ -67,7 +69,7 @@ export function SettingsTabs({
 
   return (
     <div className={className}>
-      <div className="sticky -top-4 z-10 -mx-4 -mt-4 bg-surface-raised px-4">
+      <div className="sticky top-0 z-10 bg-surface-raised">
         <div
           className="overflow-x-auto border-b border-hairline"
           data-phone-width-exempt="tab-scroll"
