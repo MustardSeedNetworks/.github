@@ -107,8 +107,8 @@ copy around it.
 
 **Status versus category.** The status hues mean success, warning, error, info
 or unknown, and only a `StatusPill` wears them. A device type, protocol or role
-is a `CategoryChip`; niac's device-type pills read as warnings because they used
-status colours for categories.
+is a `CategoryChip`; niac's device-type pills used status colours for categories
+(2026-11-22 audit), which makes a category read as a verdict.
 
 **Forms.** Wrap every control in a `FormField`: it generates the id and wires the
 label, hint and error. Fields are capped at 28rem (`lg` is 42rem); there is no
@@ -138,6 +138,19 @@ spacing helpers and type classes from a product's own `index.css` (`gap-tight`,
 `py-row-lg`, `mb-content`, `flex-between`, `heading-1`, `body-small`), and a bare
 status-hue text colour on a status-hue wash (use `-strong`).
 `tests/vocabulary.test.ts` enforces this on every component.
+
+## What it does not do (yet)
+
+Left out on purpose, so the first adopter knows what to ask for:
+
+- `DataTable` has no virtual scrolling, row click, loading state or sticky
+  header. niac's `DeviceTable` uses virtualization and its `ConversationList` and
+  `PcapPacketList` use row click, so those need an upstream change before they
+  migrate; a local fork is not an option, since the copy is hash-locked.
+- `Button` has no loading state, ghost or icon-only variant, and no permission
+  hook (niac's `action`); a product wraps it.
+- `Select` reports the native change event; seed's `onChange(value)` callers
+  adapt.
 
 ## Tests travel with the components
 

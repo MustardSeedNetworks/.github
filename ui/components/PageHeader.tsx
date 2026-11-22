@@ -5,7 +5,7 @@
  * help entry) with its i18n, tooltip, router and icon coupling removed. All
  * strings arrive translated.
  *
- * The fleet's 76px header (UI-DENSITY, 2026-09-17) is not a set height; it is
+ * The fleet's 76px header (the 2026-09-17 density pass) is not a set height; it is
  * what these three lines measure at sm and up: a 10px kicker, a 24px title at
  * leading-tight and a 14px subtitle at leading-relaxed, with 4px between them.
  * Do not add padding, a min-height or a fourth line, and keep the title

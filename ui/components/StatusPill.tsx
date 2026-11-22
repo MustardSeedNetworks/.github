@@ -4,7 +4,7 @@
  * Status colours mean one of success, warning, error or info, or "cannot say"
  * (`unknown`, neutral). They never label a category: a device type, a protocol
  * or a role is a CategoryChip. niac's device-type pills used the status hues
- * for categories, so a printer read as a warning.
+ * for categories (2026-11-22 audit), which makes a category read as a verdict.
  *
  * The label is required and always shown: colour is never the only signal
  * (WCAG 1.4.1). The text takes the `-strong` token, which clears 4.5:1 on its
