@@ -1,0 +1,24 @@
+name: 'Verify shared UI copies'
+description: >-
+  Fail when a product's copies of the canonical shared UI files (the theme and
+  the page components under ui/src/shared/) differ from this repo's, by sha256.
+  Runs scripts/ui_shared.py verify from the action's own checkout, like the
+  repo-checks and i18n-validate composites, so there is no second checkout and
+  no ref to keep in step. `ci-conformance` already runs the components half on
+  every product's CI; call this where the full check, theme included, should
+  also run on its own, or from a product's `make` target.
+
+inputs:
+  root:
+    description: The product repository root to verify.
+    required: false
+    default: '.'
+
+runs:
+  using: composite
+  steps:
+    - name: Verify shared UI copies
+      shell: bash
+      env:
+        PRODUCT_ROOT: ${{ inputs.root }}
+      run: python3 "${{ github.action_path }}/../../../scripts/ui_shared.py" verify "$PRODUCT_ROOT"

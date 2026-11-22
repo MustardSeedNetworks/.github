@@ -45,6 +45,10 @@ Checks
     main commit and filled the Free plan's 20 concurrent jobs. Release Please
     already runs from workflow_run; a sub-daily cron is a second copy.
 
+11. The shared page components match the canonical set byte for byte, once a
+    product has copied them (`ui/src/shared/` exists). `scripts/ui_shared.py`
+    holds the mapping and the manifest; the theme keeps its own rule above.
+
 Exit 0 clean, 1 on any finding.
 """
 
@@ -56,6 +60,8 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+import ui_shared
 
 # Settings that must be identical fleet-wide. Free-tier GitHub cannot ENFORCE
 # these centrally (org rulesets need Team), so this check detects drift instead.
@@ -253,6 +259,20 @@ def shared_theme(root: Path, repo_root: Path) -> list[str]:
         f"    Change the canonical file and re-copy it into all four repos; "
         f"a product-local edit cannot pass."
     ]
+
+
+def shared_components(root: Path, repo_root: Path) -> list[str]:
+    """A product's copies of the shared page components, if they have drifted.
+
+    Same reasoning as the theme: four repos, no master, and a per-repo check
+    cannot see a fleet-wide divergence. Only a product that has copied the set
+    (its `ui/src/shared/` exists) is in scope, so a component added upstream
+    never turns a product red before its adoption PR. Its theme file is left to
+    `shared_theme` above.
+    """
+    if not (repo_root / ui_shared.MANIFEST).exists() or not ui_shared.adopted(root):
+        return []
+    return ui_shared.verify(repo_root, root, prefix=f"{ui_shared.SHARED_DEST.as_posix()}/")
 
 
 def status_vocabulary(root: Path, policy_dir: Path) -> list[str]:
@@ -616,6 +636,10 @@ def main() -> int:
 
     repo_root = Path(__file__).resolve().parent.parent
     for drift in shared_theme(root, repo_root):
+        fail(drift)
+        findings += 1
+
+    for drift in shared_components(root, repo_root):
         fail(drift)
         findings += 1
 

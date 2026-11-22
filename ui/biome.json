@@ -1,0 +1,230 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": false,
+    "defaultBranch": "main"
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "components/**",
+      "tests/**",
+      "vitest.config.ts",
+      "package.json",
+      "tsconfig.json",
+      "biome.json"
+    ],
+    "maxSize": 1048576
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "semicolons": "always",
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "arrowParentheses": "always",
+      "bracketSpacing": true
+    }
+  },
+  "css": {
+    "parser": {
+      "cssModules": true,
+      "tailwindDirectives": true
+    },
+    "linter": {
+      "enabled": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "react": {
+                "importNames": ["FC", "FunctionComponent"],
+                "message": "Type the props parameter directly: function Name({ a }: NameProps)."
+              }
+            }
+          }
+        },
+        "noDefaultExport": "off",
+        "useFilenamingConvention": "off",
+        "useSpreadOverApply": "error",
+        "useDestructuring": "error"
+      },
+      "suspicious": {
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": ["warn", "error"]
+          }
+        },
+        "noImportCycles": "warn",
+        "noDuplicatedSpreadProps": "error",
+        "noParametersOnlyUsedInRecursion": "error",
+        "useArraySortCompare": "error",
+        "noLeakedRender": "error",
+        "noShadow": "error",
+        "noEqualsToNull": "error"
+      },
+      "performance": {
+        "noBarrelFile": "error",
+        "noReExportAll": "error"
+      },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": {
+            "maxAllowedComplexity": 40
+          }
+        },
+        "useArrayFind": "error"
+      },
+      "nursery": {
+        "useAwaitThenable": "error",
+        "useExhaustiveSwitchCases": "error",
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "useRegexpExec": "error"
+      }
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["tests/load/**/*.js"],
+      "linter": {
+        "enabled": false
+      },
+      "formatter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off",
+            "noExportsInTest": "off"
+          },
+          "complexity": {
+            "noExcessiveCognitiveComplexity": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/e2e/**/*.ts", "**/e2e/**/*.spec.ts"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "useAwaitThenable": "off"
+          },
+          "suspicious": {
+            "noSkippedTests": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.stories.ts", "**/*.stories.tsx"],
+      "linter": {
+        "rules": {
+          "nursery": {},
+          "suspicious": {
+            "noShadow": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/scripts/**", "**/cli/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["next.config.js", "next.config.mjs", "vite.config.ts", "vitest.config.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/api/index.ts"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/RFC*.tsx",
+        "**/RFC*.ts",
+        "**/TSN*.tsx",
+        "**/TSN*.ts",
+        "**/MEF*.tsx",
+        "**/MEF*.ts",
+        "**/DHCP*.tsx",
+        "**/DHCP*.ts",
+        "**/DNS*.tsx",
+        "**/DNS*.ts",
+        "**/FTP*.tsx",
+        "**/FTP*.ts",
+        "**/HTTP*.tsx",
+        "**/HTTP*.ts",
+        "**/SNMP*.tsx",
+        "**/SNMP*.ts",
+        "**/TCP*.tsx",
+        "**/UDP*.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/index.ts", "**/index.tsx", "**/DiffViewer.tsx"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off",
+            "noReExportAll": "off"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -6,3 +6,6 @@ scripts/phone-width/node_modules/
 # itself; pinned by scripts/renovate-soak/package-lock.json, not vendored.
 scripts/renovate-soak/node_modules/
 __pycache__/
+
+# The shared UI components' toolchain; pinned by ui/package-lock.json.
+ui/node_modules/
