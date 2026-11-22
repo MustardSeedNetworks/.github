@@ -34,8 +34,10 @@ worst pair.
 ## Changing a colour
 
 1. Edit `ui/theme/msn-shared.css` here.
-2. Copy it verbatim into all four repos' `ui/src/theme/msn-shared.css` in one
-   lockstep change.
+2. Run `python3 scripts/ui_shared.py manifest`, then
+   `python3 scripts/ui_shared.py copy <repo>` in each of the four repos in one
+   lockstep change. It copies this file to `ui/src/theme/msn-shared.css`, and
+   the page components with it ([`../README.md`](../README.md)).
 
 A product-local edit fails `ci-conformance` by construction. A repo with no
 `ui/src` directory is out of scope.

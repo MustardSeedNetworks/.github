@@ -70,6 +70,16 @@ jobs:
           python3 scripts/test-check-theme-contrast.py
           python3 scripts/check-theme-contrast.py
 
+      # The shared UI set (theme plus page components) reaches the products by
+      # copy and hash, so the copy script, the manifest and the conformance
+      # rule are asserted here: each must fire on drift, a missing file and a
+      # stray file, and stay quiet on a product that has not adopted the set.
+      - name: Run the shared-UI mechanism tests
+        run: |
+          set -euo pipefail
+          python3 scripts/test-ui-shared.py
+          python3 scripts/ui_shared.py manifest --check
+
       # The pin policy this repo hands the fleet was never pointed back here:
       # `license-check.yml` installed go-licenses@latest into four repos' CI
       # (.github#67). This applies it to our own workflows and images.
@@ -181,6 +191,35 @@ jobs:
           node scripts/test-check-renovate-soak.mjs
           node scripts/renovate-soak/check-renovate-soak.mjs
           node scripts/renovate-soak/test-groups.mjs
+
+  # The canonical page components. They are copied into four products, so a
+  # defect here ships four times: type, lint and test them where they are
+  # defined, with the same Biome and TypeScript the products run. The class
+  # vocabulary test stands in for compiling Tailwind, which jsdom never does.
+  ui-shared:
+    name: Shared UI Components
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26.13.1"
+
+      - name: Install the toolchain
+        working-directory: ui
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck, lint and test the components
+        working-directory: ui
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run lint
+          npm test
 
   workflow-lint:
     name: Workflow Lint
@@ -356,6 +395,7 @@ jobs:
       - python
       - license-check-npm
       - renovate-config
+      - ui-shared
       - workflow-lint
       - phone-width
       - phone-width-session-self-test
