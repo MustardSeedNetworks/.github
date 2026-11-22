@@ -95,6 +95,12 @@ jobs:
       - name: Run the merge-queue ejection tests
         run: python3 scripts/test-merge-queue-ejection.py
 
+      # check-pr-body.py reads its rules out of a repo's pr-hygiene.yml. These
+      # cases run it against a pinned copy and assert it refuses a workflow
+      # whose rules it can no longer find.
+      - name: Run the PR-body check tests
+        run: python3 scripts/test-check-pr-body.py
+
       # The repo checks are the one copy every product's CI and `make test`
       # run (G-21), so a checker that stops failing weakens four repos at once.
       - name: Run the shared repo-check tests
