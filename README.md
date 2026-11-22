@@ -37,3 +37,16 @@ copy, and `ci-conformance` fails the copy that disagrees. The **brand** tokens
 that make a product itself — `product-<name>.css` — stay per-repo.
 
 See the remediation plan for the full rationale and the duplication scorecard.
+
+## Checking a PR title and body locally
+
+Every product repo lints PR titles and bodies in `pr-hygiene.yml`. Run the same
+rules before `gh pr create`; from a product repo checkout:
+
+```sh
+python3 path/to/.github/scripts/check-pr-body.py --title 'fix(api): handle empty body' --body-file body.md
+```
+
+The script reads the rules out of that repo's own `.github/workflows/pr-hygiene.yml`
+instead of keeping a copy, so it cannot drift from CI. It exits 2 if the workflow
+changes shape in a way it cannot read. Product repos expose it as `make pr-check`.
