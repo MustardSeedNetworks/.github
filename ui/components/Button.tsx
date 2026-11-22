@@ -67,17 +67,17 @@ interface IconOnlyButtonProps extends CommonProps {
 export type ButtonProps = LabelledButtonProps | IconOnlyButtonProps;
 
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-lg border font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-sunken disabled:text-text-disabled';
+  'inline-flex items-center justify-center gap-2 rounded-lg border font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-not-allowed disabled:border-hairline disabled:bg-surface-sunken disabled:text-text-disabled aria-disabled:cursor-not-allowed aria-disabled:border-hairline aria-disabled:bg-surface-sunken aria-disabled:text-text-disabled';
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    'border-transparent bg-brand-primary text-on-brand hover:bg-brand-primary/90 disabled:hover:bg-surface-sunken',
+    'border-transparent bg-brand-primary text-on-brand hover:bg-brand-primary/90 disabled:hover:bg-surface-sunken aria-disabled:hover:bg-surface-sunken',
   secondary:
-    'border-surface-border bg-surface-raised text-text-primary hover:bg-surface-hover disabled:hover:bg-surface-sunken',
+    'border-surface-border bg-surface-raised text-text-primary hover:bg-surface-hover disabled:hover:bg-surface-sunken aria-disabled:hover:bg-surface-sunken',
   ghost:
-    'border-transparent bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:hover:bg-surface-sunken',
+    'border-transparent bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary disabled:hover:bg-surface-sunken aria-disabled:hover:bg-surface-sunken',
   destructive:
-    'border-transparent bg-status-error text-on-danger hover:bg-status-error/90 disabled:hover:bg-surface-sunken',
+    'border-transparent bg-status-error text-on-danger hover:bg-status-error/90 disabled:hover:bg-surface-sunken aria-disabled:hover:bg-surface-sunken',
 };
 
 const sizes: Record<ButtonSize, string> = {

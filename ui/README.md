@@ -73,7 +73,7 @@ router seam is `renderLink`, which a product points at its own `Link`.
 | `SegmentedControl` | One of two to five options that change a view in place. | niac and trellis `aria-pressed` groups |
 | `CollapsibleSection` | A foldable block (advanced options). | seed, stem, niac `CollapsibleSection` |
 | `Alert` | An inline message in a status tone. | seed, stem, niac `Alert` |
-| `Tooltip` | Short text on hover and focus for an icon control. | all four `Tooltip`s |
+| `Tooltip` | Short text on hover and focus for an icon control. Portalled to `document.body`, flips and follows scroll, so nothing clips it; a disabled `Button` can still explain itself. | all four `Tooltip`s |
 | `Modal`, `ConfirmDialog`, `InputModal` | A short blocking task, the confirmation every destructive action gets, a one-field prompt. | seed, stem, niac `Modal`, `ConfirmModal`, `InputModal` |
 | `Skeleton` | A loading placeholder bar. | seed and niac `Skeleton` |
 
@@ -164,9 +164,6 @@ product keeps its own until two products need it:
   audit found misused.
 - `Toast`, `CommandPalette`, `Sidebar`, `StatusRollup`: the shell, already
   matched.
-- `Tooltip` is positioned, not portalled, so an `overflow-hidden` ancestor clips
-  it, and it does not wrap a disabled button (explain a disabled action in a
-  `title` or the copy around it).
 
 ## Tests travel with the components
 
