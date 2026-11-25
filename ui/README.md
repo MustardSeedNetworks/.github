@@ -63,11 +63,13 @@ router seam is `renderLink`, which a product points at its own `Link`.
 | `RightDrawer` | The one side panel. Help and Settings render inside it. | stem and niac drawers' focus handling |
 | `SettingsTabs` | Settings and Help sections inside a `RightDrawer`; wraps, never scrolls. | niac `SettingsDrawer` tabs, niac `HelpTabs` |
 | `Toggle` | An on/off setting. | stem `Toggle`, track reworked |
-| `Select` | A choice from a short list. Native, themed; `onValueChange(value)`. | seed `Select` |
-| `Button`, `ButtonLink` | `primary`, `secondary`, `ghost`, `destructive`; `xs`, `sm`, `md`; `loading`; icon-only (needs an `aria-label`); the same control as an `<a>` or a router link. | niac `Button`, `IconButton`, `LinkButton`; trellis `LinkButton` |
+| `RadioGroup` | One choice from a few, as native radios in a labelled fieldset with a hint and a group error. | new, from stem's setup wizard and reflector profile |
+| `RailFooter` | The bottom of the left rail, identical in all four products: status, one product control, Help, Settings, theme, sign-out, version, mark, collapse. | niac's `SidebarFooter` (see below) |
+| `Select` | A choice from a short list, from an `options` array or JSX `<option>` children. Native, themed; `onValueChange(value)`. | seed `Select` |
+| `Button`, `ButtonLink` | `primary`, `secondary`, `ghost`, `destructive`; `xs`, `sm`, `md`; `loading`; `disabledReason` (disabled but focusable, with the reason in a tooltip); icon-only (needs an `aria-label`); the same control as an `<a>` or a router link. | niac `Button`, `IconButton`, `LinkButton`; trellis `LinkButton` |
 | `StatusPill`, `StatusIndicator` | A verdict in the status colours (`StatusPill`, optional glyph); the label-less round badge for a card header (`StatusIndicator`, with `loading`). | niac `StatusBadge` (pill), seed and niac `StatusBadge` (indicator) |
 | `CategoryChip` | A neutral category label (device type, protocol, role). | new, from the audit |
-| `FormField`, `FormSection`, `HelpIcon` | A label (any node, with an inline help accessory), one control, hint and error, capped width; a titled group of fields; the "?" with a tooltip. | niac `FormField`, stem `FormSection`, `HelpIcon`, `FieldError` |
+| `FormField`, `FormSection`, `HelpIcon` | A label (any node, with an inline help accessory), one control, hint and error, capped width (`group`: a fieldset and legend with one group error); a titled group of fields; the "?" with a tooltip. | niac `FormField`, stem `FormSection`, `HelpIcon`, `FieldError` |
 | `Input`, `Textarea`, `Checkbox` | Text, multi-line and tick controls, themed, inside a `FormField`. all pass `id`, `name`, `data-testid`, `aria-*` and `ref` through. | seed, stem, niac `Input`, `Textarea`, `Checkbox` |
 | `SearchInput` | A filter box for a list or table. | seed, stem, niac `SearchInput` |
 | `SegmentedControl` | One of two to five options that change a view in place. | niac and trellis `aria-pressed` groups |
@@ -118,8 +120,9 @@ filled `destructive` variant, never an outlined or text-only red, and goes
 through a `ConfirmDialog`. An icon-only button needs an `aria-label` (the type
 enforces it); put a `Tooltip` on it. Use `loading` for an action in flight. An action that navigates is a
 `ButtonLink` (an `<a>`, or a router `Link` through `renderLink`), not a `Button`
-wrapped in a link. Disabled is visibly disabled; say why in a `title` or the
-copy around it.
+wrapped in a link. Disabled is visibly disabled; say why with
+`disabledReason`, which keeps the button focusable (`aria-disabled`) and shows the
+reason in a `Tooltip`, or in the copy around it.
 
 **Status versus category.** The status hues mean success, warning, error, info
 or unknown, and only a `StatusPill` wears them. A device type, protocol or role
@@ -161,6 +164,73 @@ dismissable with Escape); do not wrap one around something that opens a menu.
 drawer is three rows and every tab is on screen; a sideways scroller hides tabs
 behind an affordance a person has to notice (niac review D1). Do not add a
 scroll strip or an overflow menu for more tabs; fewer, shorter labels first.
+
+## Rail footer
+
+The rail footer is one component, `RailFooter`, fed props by each product. Owner
+rule (2026-09-15): the shell is the rail and the page header; the status pill,
+the theme toggle and the account live in the rail; Help opens the current page's
+section; theme is the Settings 3-way control plus a rail-footer quick toggle on
+one store. The 2026-11-25 review found four different footers; this is the one.
+
+```text
+ expanded (224px, and the 390px drawer)      collapsed (64px)
++-----------------------------------+       +------+
+| (a) [* Online]                    |       |  *   |   status: a dot, tooltip
+| (b) [icon  Profile        ⌄ ]     |       | icon |   ONE product control
+| (c)  ?     ⚙     ☾     ⎋          |       |  ?   |   Help, Settings, Theme,
+|                                   |       |  ⚙   |   Sign out (icons only,
+|                                   |       |  ☾   |   aria-label + tooltip;
+|                                   |       |  ⎋   |   sign-out only with auth)
+| (d) v0.285.3                      |       |v0.285|   "v<semver>"
+| (e) ◆ Mustard Seed Net…   (f) ‹   |       |  ◆   |   mark, then collapse
+|                                   |       |  ›   |
++-----------------------------------+       +------+
+```
+
+Slots, in this order, always:
+
+| Slot | Prop | Rule |
+| --- | --- | --- |
+| (a) status | `status: { tone, label }` | Optional. A `StatusPill` (niac Online; seed, stem and trellis daemon reachability). Collapsed it is a dot with a tooltip. Replaces the dot that sat on the product mark at the top of the rail. |
+| (b) product control | `productSlot` | Optional, ONE. `{ label, value, icon }` plus either `onClick` (a plain button) or `options` + `selected` + `onSelect` (a menu button: `role="menu"` of `menuitemradio`, arrow keys, Escape, opens upward or beside the collapsed rail). stem's role switch, seed's profile, niac's session. It cannot be drawn any other way. |
+| (c) actions | `help`, `settings`, `theme`, `signOut` | Icon-only buttons, fixed order, `{ label, onClick }`. `theme` also takes `isDark` (sun or moon) and its `label` names what a click does. `signOut` is passed only by a product with auth. No text links, no per-product icon rows. |
+| (d) version | `version: { value, label }` | `formatVersion(value)`: "v<semver>". |
+| (e) mark | `mark: { src, name }` | The vendored company glyph's URL and the wordmark; the wordmark goes when collapsed. |
+| (f) collapse | `collapse` | Same row as the mark, right-aligned; a chevron that is the expand control when collapsed. Absent in the drawer. |
+
+**Version format.** The visible line is `v<semver>`, never a commit or `-dirty`.
+`git describe` output ("v0.285.3-31-gf4194afb-dirty") shows as "v0.285.3"; the
+whole string is the tooltip (and the line is keyboard-focusable when there is a
+tooltip). A prerelease tag (`-rc.1`) is part of the version and stays; a value
+that is not semver ("dev") shows as it is. `formatVersion` lives in
+`railVersion.ts`; import it from there if a product shows a version elsewhere.
+
+`variant="drawer"` is the same footer in the 390px mobile drawer: always
+expanded, same order, no collapse control. Strings arrive translated. Test ids
+are fixed: `rail-footer`, `rail-status`, `rail-product-slot` (and `-menu`),
+`rail-help`, `rail-settings`, `rail-theme`, `rail-sign-out`, `rail-version`,
+`rail-mark`, `rail-collapse`. The footer does not own the rail's width,
+scrolling or the product mark at the top; the rail must not clip it
+(`overflow-hidden`), because the product menu opens beside the collapsed rail.
+
+Based on niac's `SidebarFooter`: the one footer that was already a single
+component with a collapsed mode, a version line, the company mark and an expand
+control. seed's and stem's were the same shape with more rows; trellis's lacked
+Help.
+
+### Per-product footer migration
+
+| Product | Passes | Deletes |
+| --- | --- | --- |
+| seed | `status` from `SidebarLayout`'s `status` (and drop the header dot); `productSlot` = the active profile (`options` = profiles, `onSelect` = `onProfileSwitch`); `help`, `settings`, `theme` (`toggleTheme`, `isDark`), `signOut` = `logout`; `version`; `mark`; `collapse`. | The local `SidebarFooter` and `FooterIconButton` in `Sidebar.tsx`, `RailControls.tsx`, `MsnMark.tsx`. "Manage Profiles" moves into Settings, and the Ethernet/Wi-Fi interface switch has no rail slot: it goes to the page that uses it (decision for the adoption PR). |
+| stem | `status` from `RailStatus` (drop the header dot); `productSlot` = the Reflector / Test Master switch (`options`, `onSelect`); `help`, `settings`, `theme`, `signOut` = logout; `version`; `mark`; `collapse`. | `SidebarFooter` and `FooterIconButton` in `SidebarChrome.tsx`, `roleControl` on `SidebarLayout`, `MsnMark.tsx`. The refresh icon is not a rail action: it moves to the pages that have data to refresh. |
+| niac | `status` = the connection state mapped to `success`/`warning`/`error`; `productSlot` = the session (`options` from `SessionSwitcher`'s list, or `onClick` opening it); `help`, `settings`, `theme`, `signOut` = `disconnectRuntimeAPI` (niac's disconnect is its sign-out); `version`; `mark`; `collapse`. | `RailControls.tsx`, `SidebarFooter` and `FooterIconButton` in `Sidebar.tsx`, the collapse chevron in `SidebarHeader`, `MsnMark.tsx`. |
+| trellis | `status` from `useConnectionStatus`; no `productSlot`; `help` (new: opens the page's help), `settings`, `theme` (`useTheme`), `signOut` only when `useAuth().required`; `version`; `mark`; `collapse`; the `MobileNav` drawer renders `variant="drawer"`. | The inline version block, `SettingsButton`, `ThemeToggle`, `SignOutButton` and the collapse button in `Sidebar.tsx`, `MsnMark.tsx`. The "Theme: System" text goes: the 3-way control is in Settings. |
+
+Specs that used `sidebar-help-button`, `sidebar-settings-button`, `theme-toggle`,
+`rail-theme-toggle`, `rail-logout`, `disconnect`, `sidebar-expand` and
+`sidebar-collapse` move to the `rail-*` ids above.
 
 ## Density specs and the help button's hit area
 
@@ -249,6 +319,45 @@ re-copy plus the items marked **edit**; everything else is additive.
 | `Skeleton` | `variant`, `width`, `height`, `lines`. | niac's `CardSkeleton`, `TableRowSkeleton`, `StatCardSkeleton` were unused outside stories: delete them. |
 | `Alert` | `size="sm"`, `data-testid`. | seed's local `Alert` (`status`) is imported only by stories and one test now that the pages use the shared one: delete it. Its hand-rolled `role="alert"` blocks inside the dashboard cards become `<Alert tone="error" size="sm">`. `dismissLabel` is required with `onDismiss`. |
 | New | `HelpIcon`, `FormSection`, `ButtonLink`, `StatusIndicator`, `documentTitle`. | Replace stem's `HelpIcon`, `FormSection`, `FieldError`; niac's `HelpTip`. |
+
+## Migration from v2 (986e485c) to v3
+
+A re-copy plus the **edit** items; the rest is additive. After the re-copy a
+product can drop the `ui/src/shared/` skip in its file-size gate: no file under
+it is over 600 lines any more (the longest is 435), so the products' own limit
+now holds for the copies.
+
+| Component | Change | Action |
+| --- | --- | --- |
+| `RailFooter`, `RailProductSlot`, `railVersion` | New. | See "Rail footer" above; delete each product's own footer. |
+| `RadioGroup` | New: native radios in a fieldset, 24px targets, hint, group error, `name` required. | Use for stem's setup wizard and reflector profile instead of hand-built radios. |
+| `FormField` | `group` renders a fieldset and legend; the error and hint attach to the fieldset (`aria-describedby`) and are announced. `labelAccessory` is ignored in a group. | Wrap a checkbox or radio group in `<FormField group label=...>`. |
+| `Select` | `options` is optional and JSX `<option>` / `<optgroup>` children render after it; `children` is now allowed. | niac can build options in JSX: pass them as children. |
+| `Tooltip` | Escape no longer races the render (below). | None. |
+| `Card` | A clickable card is a plain `div` with a real `<button>` laid over it, not `<section role="button">`; passes axe's aria-allowed-role. The button is named by `aria-label`, else the title (one is required). `headerAction` stays clickable. | **edit** specs that focused the card via `tabindex` or sent Enter or Space to it: the overlay is a native button (`getByRole('button', { name })`). A clickable card with neither title nor `aria-label` needs one. |
+| `Checkbox`, `Toggle` | `onClick` reaches the control (`Toggle` runs it before `onChange`); `hideLabel` keeps the label as the accessible name and hides it visually. | None. |
+| `Modal` | `size="full"` is `h-full max-w-4xl`: as tall as the viewport allows, the body scrolls inside. | **edit** a call that used `full` for width only: use `3xl`. |
+| `Button` | `disabledReason`: with `disabled`, the button is `aria-disabled` (focusable, click and Enter swallowed, so no form submit) and a Tooltip carries the reason. | Replace seed's `GatedButton` with `<Button disabled={!allowed} disabledReason={t(...)}>`; delete `GatedButton.tsx`. |
+| `DataTable` | Split into `DataTable.tsx`, `DataTableTypes.ts`, `DataTableModel.ts`, `DataTableSort.ts`, `DataTableHead.tsx`, `DataTableRow.tsx`, `DataTableParts.tsx`, `DataTableStyles.ts`; tests into five files plus `DataTableTestUtils.tsx`. No API change: import `DataTable` and its types from `./shared/DataTable` as before. | Re-copy; drop the file-size skip. |
+
+**The Tooltip Escape flake.** niac's "Escape dismisses tooltip" failed
+intermittently under parallel workers. The cause was in the shared Tooltip, two
+ways, both fixed:
+
+1. The 120ms close timer reset `dismissed` when the pointer's grace period ended,
+   even if focus was still on the trigger. A pointer that left within 120ms of an
+   Escape brought the bubble back. `dismissed` now clears only when pointer and
+   focus have both left.
+2. The Escape listener was attached in an effect that ran after React rendered
+   `open`. React renders a hover later than the pointer, so an Escape that
+   arrived first found no listener. Hover and focus state now live in refs, and
+   the listener is attached and removed by the same native events that set them,
+   so it exists the moment the pointer or focus arrives.
+
+`Tooltip.test.tsx` reproduces the first with fake timers (it fails on the old
+code). The second is covered by a test that dispatches the events outside
+`act()`; that one passes on the old code in jsdom, whose scheduler is too eager
+to show the gap, so it is a guard, not a reproduction.
 
 ## Tests travel with the components
 
