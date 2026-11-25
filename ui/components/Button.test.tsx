@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Button, ButtonLink } from './Button';
 
@@ -263,7 +263,7 @@ describe('Button disabledReason', () => {
     const button = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
     expect(button.getAttribute('aria-disabled')).toBe('true');
-    button.focus();
+    act(() => button.focus());
     expect(document.activeElement).toBe(button);
   });
 
