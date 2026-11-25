@@ -128,7 +128,6 @@ describe('Modal, covering seed and niac usage', () => {
     ['sm', 'max-w-sm'],
     ['md', 'max-w-md'],
     ['lg', 'max-w-lg'],
-    ['xl', 'max-w-xl'],
     ['3xl', 'max-w-3xl'],
     ['full', 'max-w-4xl'],
   ] as const)('size %s is %s, always full width up to the cap', (size, cap) => {
@@ -186,10 +185,12 @@ describe('Modal, covering seed and niac usage', () => {
   it('makes a scrolling body with nothing tabbable focusable, and leaves a tabbable one alone', () => {
     const sizes = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(900);
     const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300);
-    const { rerender } = render(modal({}, <p>Long read-only text</p>));
+    const { unmount } = render(modal({}, <p>Long read-only text</p>));
     const body = screen.getByText('Long read-only text').parentElement;
     expect(body?.getAttribute('tabindex')).toBe('0');
-    rerender(modal());
+    expect(body?.getAttribute('aria-label')).toBe('Rename');
+    unmount();
+    render(modal());
     expect(screen.getByLabelText('Name').parentElement?.hasAttribute('tabindex')).toBe(false);
     sizes.mockRestore();
     height.mockRestore();

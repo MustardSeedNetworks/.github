@@ -144,7 +144,7 @@ describe('CollapsibleSection, covering seed usage', () => {
   });
 });
 
-describe('CollapsibleSection, controlled and with a header control', () => {
+describe('CollapsibleSection, controlled', () => {
   it('is controlled by open, and reports the requested state without changing it itself', () => {
     const onOpenChange = vi.fn();
     const { rerender } = render(
@@ -175,24 +175,6 @@ describe('CollapsibleSection, controlled and with a header control', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'A' }));
     expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(true);
-  });
-
-  it('puts headerAction beside the toggle button, not inside it, and clicking it does not fold', () => {
-    const onChange = vi.fn();
-    render(
-      <CollapsibleSection
-        title="DHCP"
-        headerAction={<input type="checkbox" aria-label="Enable DHCP" onChange={onChange} />}
-      >
-        <p>x</p>
-      </CollapsibleSection>,
-    );
-    const toggle = screen.getByRole('button', { name: 'DHCP' });
-    const enable = screen.getByRole('checkbox', { name: 'Enable DHCP' });
-    expect(toggle.contains(enable)).toBe(false);
-    fireEvent.click(enable);
-    expect(onChange).toHaveBeenCalledOnce();
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('takes an id on the root', () => {

@@ -23,11 +23,8 @@
  *   shows the message as an alert; `empty` replaces the body with a neutral
  *   message. Precedence is loading, error, empty, children. Pass `status`
  *   yourself ("loading", "error", "unknown") to match.
- * - `padding`: `md` (default), `sm`, `lg`, or `none` for a card whose body is a
- *   DataTable that brings its own frame (the header and footer keep their inset).
- * - `variant`: `default`, or `muted`, a flat sunken block for secondary
- *   content. There is no elevated or outlined variant.
- * - `footer`: under a hairline, for actions or a timestamp.
+ * - `padding`: `md` (default), `sm`, `lg`, or `none` for a body that brings its
+ *   own inset (the header keeps its own).
  * - `onClick` makes the whole card a button (Enter and Space too) with a hover
  *   border and focus ring; keep interactive controls out of such a card, or
  *   leave `onClick` off and put a button in `headerAction`.
@@ -60,9 +57,7 @@ interface CardBaseProps {
   headingLevel?: 2 | 3 | 4;
   /** A bar down the left edge in the status colour. */
   tone?: StatusTone;
-  variant?: 'default' | 'muted';
   padding?: 'none' | 'sm' | 'md' | 'lg';
-  footer?: ReactNode;
   /** Skeleton lines in place of the body; sets `aria-busy`. */
   loading?: boolean;
   /** The body is this message, as an alert. */
@@ -116,9 +111,7 @@ export function Card({
   status,
   statusLabel,
   tone,
-  variant = 'default',
   padding = 'md',
-  footer,
   loading = false,
   error,
   empty,
@@ -170,7 +163,6 @@ export function Card({
       {...(interactive ? { role: 'button', tabIndex: 0, onClick, onKeyDown } : {})}
       className={cx(
         'panel min-w-0',
-        variant === 'muted' && 'bg-surface-sunken',
         paddings[padding],
         tone && toneBars[tone],
         interactive &&
@@ -181,8 +173,8 @@ export function Card({
       {hasHeader ? (
         <div
           className={cx(
-            'mb-3 flex flex-wrap items-center justify-between gap-2',
-            inset && 'mb-0 border-b border-hairline px-4 py-3',
+            'flex flex-wrap items-center justify-between gap-2',
+            inset ? 'border-b border-hairline px-4 py-3' : 'mb-3',
           )}
         >
           <div className="flex min-w-0 items-center gap-2">
@@ -213,11 +205,6 @@ export function Card({
         </div>
       ) : null}
       {body}
-      {footer ? (
-        <div className={cx('border-t border-hairline', inset ? 'px-4 py-3' : 'mt-3 pt-3')}>
-          {footer}
-        </div>
-      ) : null}
     </section>
   );
 }

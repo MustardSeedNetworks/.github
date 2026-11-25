@@ -451,8 +451,7 @@ function TableRow<T>({
         style={extra?.style}
         className={cx(
           'h-11 hover:bg-surface-hover',
-          extra?.tone && toneWash[extra.tone],
-          selected && 'bg-surface-hover',
+          selected ? 'bg-surface-hover' : extra?.tone && toneWash[extra.tone],
           onRowClick &&
             'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-primary',
           extra?.className,

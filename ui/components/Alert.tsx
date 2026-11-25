@@ -2,14 +2,13 @@
  * Alert: an inline message that stays on the page (a Toast is the transient
  * one). Tone is one of the status four; the icon and the text carry it as well
  * as the colour. `error` and `warning` announce at once (`role="alert"`),
- * `success` and `info` politely (`role="status"`); `role` overrides that for a
- * message that updates in place (a polling card's error, which should not
- * re-announce on every tick: pass `role="status"`).
+ * `success` and `info` politely (`role="status"`).
  *
- * `size="sm"` is the in-card form seed's dashboard cards use: tighter padding,
- * 12px text, no title. `action` is one trailing control (Retry) beside the
- * dismiss button. A card's loading and error states are Card's own props; use an
- * Alert for a message that sits beside content.
+ * `size="sm"` is the in-card form: seed's dashboard cards hand-roll a padded,
+ * tinted `role="alert"` block with 12px text for a failed probe, and this is it,
+ * tighter padding and no title. A card whose whole body is an error or a loading
+ * state uses Card's own `error` and `loading`; use an Alert for a message that sits
+ * beside content.
  */
 import { CircleCheck, CircleX, Info, TriangleAlert, X } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -23,10 +22,6 @@ export interface AlertProps {
   children: ReactNode;
   /** `sm` for inside a card. */
   size?: 'md' | 'sm';
-  /** Overrides the announcement the tone implies. */
-  role?: 'alert' | 'status';
-  /** One trailing control, e.g. a Retry button. */
-  action?: ReactNode;
   onDismiss?: () => void;
   /** Accessible name of the dismiss button; required with `onDismiss`. */
   dismissLabel?: string;
@@ -62,8 +57,6 @@ export function Alert({
   title,
   children,
   size = 'md',
-  role,
-  action,
   onDismiss,
   dismissLabel,
   className,
@@ -73,7 +66,7 @@ export function Alert({
   const compact = size === 'sm';
   return (
     <div
-      role={role ?? (tone === 'error' || tone === 'warning' ? 'alert' : 'status')}
+      role={tone === 'error' || tone === 'warning' ? 'alert' : 'status'}
       data-tone={tone}
       data-testid={testId}
       className={cx(
@@ -88,7 +81,6 @@ export function Alert({
         {title ? <p className="font-semibold">{title}</p> : null}
         <div className="text-text-secondary">{children}</div>
       </div>
-      {action}
       {onDismiss ? (
         <button
           type="button"

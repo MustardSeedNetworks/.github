@@ -22,7 +22,7 @@ function withoutComments(text: string): string {
 
 const COMPONENTS = join(import.meta.dirname, '..', 'components');
 const sources = readdirSync(COMPONENTS)
-  .filter((file) => /\.tsx?$/.test(file) && !file.endsWith('.test.tsx'))
+  .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
   .map((file) => ({ file, text: withoutComments(readFileSync(join(COMPONENTS, file), 'utf8')) }));
 
 const COLOR_PREFIX =

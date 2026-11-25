@@ -58,7 +58,7 @@ export interface TooltipDescription {
   onClick: () => void;
 }
 
-export type TooltipSide = 'top' | 'bottom' | 'left' | 'right';
+export type TooltipSide = 'top' | 'bottom';
 
 export interface TooltipProps {
   /** Nothing renders when this is empty. */
@@ -72,13 +72,6 @@ const GAP = 6;
 const MARGIN = 8;
 const CLOSE_DELAY_MS = 120;
 
-const OPPOSITE: Record<TooltipSide, TooltipSide> = {
-  top: 'bottom',
-  bottom: 'top',
-  left: 'right',
-  right: 'left',
-};
-
 interface Placement {
   top: number;
   left: number;
@@ -89,24 +82,13 @@ function clamp(value: number, size: number, viewport: number): number {
 }
 
 function place(trigger: DOMRect, bubble: DOMRect, side: TooltipSide): Placement {
-  const room: Record<TooltipSide, boolean> = {
-    top: trigger.top - bubble.height - GAP >= MARGIN,
-    bottom: trigger.bottom + bubble.height + GAP <= window.innerHeight - MARGIN,
-    left: trigger.left - bubble.width - GAP >= MARGIN,
-    right: trigger.right + bubble.width + GAP <= window.innerWidth - MARGIN,
-  };
-  const chosen = room[side] || !room[OPPOSITE[side]] ? side : OPPOSITE[side];
-  const centredLeft = trigger.left + trigger.width / 2 - bubble.width / 2;
-  const centredTop = trigger.top + trigger.height / 2 - bubble.height / 2;
-  const at = {
-    top: { top: trigger.top - bubble.height - GAP, left: centredLeft },
-    bottom: { top: trigger.bottom + GAP, left: centredLeft },
-    left: { top: centredTop, left: trigger.left - bubble.width - GAP },
-    right: { top: centredTop, left: trigger.right + GAP },
-  }[chosen];
+  const fitsAbove = trigger.top - bubble.height - GAP >= MARGIN;
+  const fitsBelow = trigger.bottom + bubble.height + GAP <= window.innerHeight - MARGIN;
+  const above = side === 'top' ? fitsAbove || !fitsBelow : !fitsBelow && fitsAbove;
+  const centred = trigger.left + trigger.width / 2 - bubble.width / 2;
   return {
-    top: clamp(at.top, bubble.height, window.innerHeight),
-    left: clamp(at.left, bubble.width, window.innerWidth),
+    top: above ? trigger.top - bubble.height - GAP : trigger.bottom + GAP,
+    left: clamp(centred, bubble.width, window.innerWidth),
   };
 }
 

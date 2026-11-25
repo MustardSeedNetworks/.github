@@ -83,41 +83,7 @@ describe('Input, Select and Textarea pass-through', () => {
     expect(input.getAttribute('name')).toBe('host');
   });
 
-  it('draws a left and a right adornment inside the field, clear of the text, decorative by default', () => {
-    render(
-      <Input
-        aria-label="Host"
-        leftIcon={<svg data-testid="left" />}
-        rightIcon={<svg data-testid="right" />}
-      />,
-    );
-    const input = screen.getByRole('textbox');
-    expect(input.className).toContain('pl-9');
-    expect(input.className).toContain('pr-9');
-    expect(screen.getByTestId('left').parentElement?.getAttribute('aria-hidden')).toBe('true');
-    expect(screen.getByTestId('right').parentElement?.getAttribute('aria-hidden')).toBe('true');
-    expect(screen.getByTestId('right').parentElement?.className).toContain('pointer-events-none');
-  });
-
-  it('lets the right adornment be a working control', () => {
-    const onClick = vi.fn();
-    render(
-      <Input
-        aria-label="Password"
-        type="password"
-        rightIconInteractive
-        rightIcon={
-          <button type="button" aria-label="Show password" onClick={onClick}>
-            eye
-          </button>
-        }
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
-    expect(onClick).toHaveBeenCalledOnce();
-  });
-
-  it('renders no wrapper without an adornment', () => {
+  it('is the bare native input, with no wrapper', () => {
     const { container } = render(<Input aria-label="Host" />);
     expect(container.firstElementChild?.tagName).toBe('INPUT');
   });

@@ -309,26 +309,6 @@ describe('Tooltip', () => {
       expect(position().top).toBe(`${780 - 20 - 6}px`);
     });
 
-    it('sits to the right or left, centred vertically, and flips when the side has no room', () => {
-      const { unmount } = render(
-        <Tooltip text="Tip" side="right">
-          <button type="button">x</button>
-        </Tooltip>,
-      );
-      hover(screen.getByRole('button'));
-      expect(position()).toEqual({ top: `${200 + 15 - 10}px`, left: `${300 + 40 + 6}px` });
-      unmount();
-
-      trigger = { ...trigger, left: 20 };
-      render(
-        <Tooltip text="Tip" side="left">
-          <button type="button">x</button>
-        </Tooltip>,
-      );
-      hover(screen.getByRole('button'));
-      expect(position().left).toBe(`${20 + 40 + 6}px`);
-    });
-
     it('stays inside the viewport horizontally', () => {
       trigger = { ...trigger, left: 0, width: 10 };
       render(tip());

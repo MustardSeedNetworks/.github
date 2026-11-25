@@ -56,7 +56,7 @@ export function RightDrawer({
     onClose,
     returnFocusRef ? { returnFocusRef } : {},
   );
-  const body = useScrollable<HTMLDivElement>();
+  const body = useScrollable<HTMLDivElement>({ trackTabbables: true });
   const bodyAttributes = body.needsFocus ? { tabIndex: 0, role: 'group', 'aria-label': title } : {};
 
   if (!open) {

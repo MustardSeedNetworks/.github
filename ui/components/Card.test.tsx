@@ -86,7 +86,7 @@ describe('Card header', () => {
   });
 });
 
-describe('Card tone, variant, padding and footer', () => {
+describe('Card tone and padding', () => {
   it.each([
     ['success', 'border-l-status-success'],
     ['warning', 'border-l-status-warning'],
@@ -110,22 +110,13 @@ describe('Card tone, variant, padding and footer', () => {
     expect(screen.getByTestId('c').className).not.toContain('border-l');
   });
 
-  it('is flat in every variant: no shadow, gradient or blur', () => {
+  it('is flat: no shadow, gradient or blur', () => {
     render(
-      <Card variant="muted" tone="error" onClick={() => {}} data-testid="c">
+      <Card tone="error" onClick={() => {}} data-testid="c">
         x
       </Card>,
     );
     expect(screen.getByTestId('c').className).not.toMatch(/shadow|gradient|backdrop|blur/);
-  });
-
-  it('muted is a sunken block', () => {
-    render(
-      <Card variant="muted" data-testid="c">
-        x
-      </Card>,
-    );
-    expect(screen.getByTestId('c').className).toContain('bg-surface-sunken');
   });
 
   it.each([
@@ -141,20 +132,32 @@ describe('Card tone, variant, padding and footer', () => {
     expect(screen.getByTestId('c').className).toContain(cls);
   });
 
-  it('padding none leaves the body to its content but keeps the header and footer inset', () => {
+  it('padding none leaves the body to its content but keeps the header inset', () => {
     render(
-      <Card padding="none" title="T" footer={<span>foot</span>} data-testid="c">
+      <Card padding="none" title="T" data-testid="c">
         <div data-testid="body">body</div>
       </Card>,
     );
     expect(screen.getByTestId('c').className).not.toMatch(/(^|\s)p-\d/);
     expect(screen.getByRole('heading').closest('div[class*="px-4"]')).toBeTruthy();
-    expect(screen.getByText('foot').parentElement?.className).toContain('px-4');
   });
 
-  it('renders a footer under a hairline', () => {
-    render(<Card footer={<span>Updated 10:04</span>}>x</Card>);
-    expect(screen.getByText('Updated 10:04').parentElement?.className).toContain('border-hairline');
+  it('never emits two utilities for one property: the header margin is exclusive with its inset', () => {
+    const { rerender } = render(
+      <Card title="T" data-testid="c">
+        x
+      </Card>,
+    );
+    const header = () => screen.getByRole('heading').closest('div[class*="flex-wrap"]');
+    expect(header()?.className).toContain('mb-3');
+    expect(header()?.className).not.toContain('px-4');
+    rerender(
+      <Card title="T" padding="none" data-testid="c">
+        x
+      </Card>,
+    );
+    expect(header()?.className).not.toContain('mb-');
+    expect(header()?.className).toContain('px-4');
   });
 });
 

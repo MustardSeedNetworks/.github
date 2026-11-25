@@ -8,7 +8,7 @@
  * type: a `title` (rendered as the h2 and the accessible name), `labelledBy`
  * (the id of a heading the body renders) or `ariaLabel`.
  *
- * - `size`: `sm` 24rem, `md` 28rem, `lg` 32rem (default), `xl` 36rem, `3xl`
+ * - `size`: `sm` 24rem, `md` 28rem, `lg` 32rem (default), `3xl`
  *   48rem, `full` 56rem. All are capped by the viewport with a 16px gutter.
  * - `footer`: the actions, right-aligned under the body, pinned while the body
  *   scrolls. `header`: extra header content beside the title (a badge, a step).
@@ -29,7 +29,7 @@ import { cx } from './cx';
 import { useDialog } from './useDialog';
 import { useScrollable } from './useScrollable';
 
-export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '3xl' | 'full';
+export type ModalSize = 'sm' | 'md' | 'lg' | '3xl' | 'full';
 
 interface ModalBaseProps {
   open: boolean;
@@ -67,7 +67,6 @@ const sizes: Record<ModalSize, string> = {
   sm: 'max-w-sm',
   md: 'max-w-md',
   lg: 'max-w-lg',
-  xl: 'max-w-xl',
   '3xl': 'max-w-3xl',
   full: 'max-w-4xl',
 };
@@ -102,7 +101,7 @@ export function Modal({
     closeOnEscape ? close : () => {},
     returnFocusRef ? { returnFocusRef } : {},
   );
-  const body = useScrollable<HTMLDivElement>();
+  const body = useScrollable<HTMLDivElement>({ trackTabbables: true });
   const bodyAttributes = body.needsFocus
     ? { tabIndex: 0, role: 'group', 'aria-label': title ?? ariaLabel }
     : {};

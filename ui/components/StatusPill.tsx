@@ -51,16 +51,14 @@ const tones: Record<StatusTone, { pill: string; dot: string }> = {
   unknown: { pill: 'bg-surface-hover text-text-secondary', dot: 'bg-text-muted' },
 };
 
+const iconSizes = { xs: 'h-3.5 w-3.5', sm: 'h-4 w-4' } as const;
+
 /** The tone's glyph, decorative: whatever carries it states the tone in words. */
-export function StatusIcon({ tone, className }: { tone: IndicatorTone; className?: string }) {
+export function StatusIcon({ tone, size = 'sm' }: { tone: IndicatorTone; size?: 'xs' | 'sm' }) {
   const Glyph = glyphs[tone];
   return (
     <Glyph
-      className={cx(
-        'h-4 w-4 shrink-0',
-        tone === 'loading' && 'motion-safe:animate-spin',
-        className,
-      )}
+      className={cx('shrink-0', iconSizes[size], tone === 'loading' && 'motion-safe:animate-spin')}
       aria-hidden="true"
     />
   );
@@ -87,7 +85,7 @@ export function StatusPill({ tone, label, icon = false, className }: StatusPillP
       data-tone={tone}
     >
       {icon ? (
-        <StatusIcon tone={tone} className="h-3.5 w-3.5" />
+        <StatusIcon tone={tone} size="xs" />
       ) : (
         <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', dot)} aria-hidden="true" />
       )}
@@ -107,8 +105,8 @@ export interface StatusIndicatorProps {
 }
 
 const indicatorSizes = {
-  sm: { icon: 'p-0.5 [&>svg]:h-3.5 [&>svg]:w-3.5', dot: 'h-2 w-2' },
-  md: { icon: 'p-1 [&>svg]:h-4 [&>svg]:w-4', dot: 'h-2.5 w-2.5' },
+  sm: { icon: 'p-0.5', glyph: 'xs', dot: 'h-2 w-2' },
+  md: { icon: 'p-1', glyph: 'sm', dot: 'h-2.5 w-2.5' },
 } as const;
 
 export function StatusIndicator({
@@ -146,7 +144,7 @@ export function StatusIndicator({
         className,
       )}
     >
-      <StatusIcon tone={tone} className="h-auto w-auto" />
+      <StatusIcon tone={tone} size={indicatorSizes[size].glyph} />
     </span>
   );
 }

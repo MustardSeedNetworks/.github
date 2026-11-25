@@ -21,9 +21,6 @@
  *
  * - `open` and `onOpenChange` control it (niac's sections fold together and
  *   remember state); without `open` it manages itself, from `defaultOpen`.
- * - `headerAction` sits at the right of the header, beside the toggle button and
- *   not inside it (an enable switch, a Reset): a control may not live inside a
- *   button.
  *
  * The body stays mounted while folded (`hidden`), so form state survives.
  */
@@ -39,8 +36,6 @@ interface BaseProps {
   /** Controls the fold; pair with `onOpenChange`. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** A control at the right of the header, outside the toggle button. */
-  headerAction?: ReactNode;
   /** The size of what is folded, shown as "(n)" after the title. */
   count?: number;
   variant?: 'default' | 'compact';
@@ -67,7 +62,6 @@ export function CollapsibleSection({
   defaultOpen = false,
   open: controlledOpen,
   onOpenChange,
-  headerAction,
   count,
   status,
   statusLabel,
@@ -91,51 +85,41 @@ export function CollapsibleSection({
       data-testid={testId}
       className={cx(!compact && 'overflow-hidden rounded-lg border border-hairline', className)}
     >
-      <div
+      <button
+        id={buttonId}
+        type="button"
+        aria-expanded={open}
+        aria-controls={regionId}
+        onClick={() => {
+          setOwnOpen(!open);
+          onOpenChange?.(!open);
+        }}
         className={cx(
-          'flex items-center gap-2 hover:bg-surface-hover',
-          compact ? 'rounded-lg' : 'bg-surface-base pr-3',
+          'flex min-h-9 w-full items-center gap-2 text-left text-sm font-semibold text-text-primary hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-primary',
+          compact ? 'rounded-lg' : 'bg-surface-base px-3',
         )}
       >
-        <button
-          id={buttonId}
-          type="button"
-          aria-expanded={open}
-          aria-controls={regionId}
-          onClick={() => {
-            setOwnOpen(!open);
-            onOpenChange?.(!open);
-          }}
+        <ChevronRight
           className={cx(
-            'flex min-h-9 min-w-0 flex-1 items-center gap-2 text-left text-sm font-semibold text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-primary',
-            compact ? 'rounded-lg' : 'px-3',
+            'h-4 w-4 shrink-0 text-text-muted transition-transform',
+            open && 'rotate-90',
           )}
-        >
-          <ChevronRight
-            className={cx(
-              'h-4 w-4 shrink-0 text-text-muted transition-transform',
-              open && 'rotate-90',
-            )}
-            aria-hidden="true"
-          />
-          {status === undefined ? null : (
-            <StatusIndicator tone={status} label={statusLabel ?? ''} />
+          aria-hidden="true"
+        />
+        {status === undefined ? null : <StatusIndicator tone={status} label={statusLabel ?? ''} />}
+        <span className="min-w-0 flex-1">
+          {title}
+          {count === undefined ? null : (
+            <>
+              {' '}
+              <span className="font-normal text-text-muted">({count})</span>
+            </>
           )}
-          <span className="min-w-0 flex-1">
-            {title}
-            {count === undefined ? null : (
-              <>
-                {' '}
-                <span className="font-normal text-text-muted">({count})</span>
-              </>
-            )}
-          </span>
-          {readOnly ? (
-            <span className="shrink-0 text-xs font-normal text-text-muted">{readOnlyReason}</span>
-          ) : null}
-        </button>
-        {headerAction}
-      </div>
+        </span>
+        {readOnly ? (
+          <span className="shrink-0 text-xs font-normal text-text-muted">{readOnlyReason}</span>
+        ) : null}
+      </button>
       <section
         id={regionId}
         aria-labelledby={buttonId}
