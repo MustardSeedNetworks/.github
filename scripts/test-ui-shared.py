@@ -40,6 +40,7 @@ class Fixture(unittest.TestCase):
         write(self.canon / "ui/theme/msn-shared.css", ":root{}\n")
         write(self.canon / "ui/components/Button.tsx", "export const a = 1;\n")
         write(self.canon / "ui/components/Button.test.tsx", "export const t = 1;\n")
+        write(self.canon / "ui/components/test/Fixtures.tsx", "export const f = 1;\n")
         write(self.canon / "ui/components/notes.md", "not shipped\n")
         (self.canon / ui_shared.MANIFEST).write_text(ui_shared.render_manifest(self.canon))
         (self.product / "ui/src").mkdir(parents=True)
@@ -52,7 +53,12 @@ class ManifestTests(Fixture):
     def test_lists_theme_and_components_but_not_other_files(self) -> None:
         self.assertEqual(
             sorted(ui_shared.read_manifest(self.canon)),
-            ["src/shared/Button.test.tsx", "src/shared/Button.tsx", "src/theme/msn-shared.css"],
+            [
+                "src/shared/Button.test.tsx",
+                "src/shared/Button.tsx",
+                "src/shared/test/Fixtures.tsx",
+                "src/theme/msn-shared.css",
+            ],
         )
 
     def test_current_manifest_passes(self) -> None:
@@ -77,6 +83,11 @@ class ManifestTests(Fixture):
 class VerifyTests(Fixture):
     def test_a_fresh_copy_verifies(self) -> None:
         self.adopt()
+        self.assertEqual(ui_shared.verify(self.canon, self.product), [])
+
+    def test_a_helper_under_test_is_copied_and_verified_in_place(self) -> None:
+        self.adopt()
+        self.assertTrue((self.product / "ui/src/shared/test/Fixtures.tsx").is_file())
         self.assertEqual(ui_shared.verify(self.canon, self.product), [])
 
     def test_a_local_edit_is_drift(self) -> None:

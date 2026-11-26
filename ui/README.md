@@ -214,6 +214,13 @@ are fixed: `rail-footer`, `rail-status`, `rail-product-slot` (and `-menu`),
 scrolling or the product mark at the top; the rail must not clip it
 (`overflow-hidden`), because the product menu opens beside the collapsed rail.
 
+Every action is a 40px icon button in all three renderings (collapsed, expanded,
+drawer); the floor is WCAG 2.5.8's 24px. The buttons carry `min-h-10 shrink-0`
+themselves, so a product does not wrap the footer in `shrink-0`. The `status`
+region is a live region (`role="status"`), deliberately not a tab stop: it has
+no `tabIndex`, a screen reader announces a change, and the version line is the
+only non-action element a keyboard can reach.
+
 Based on niac's `SidebarFooter`: the one footer that was already a single
 component with a collapsed mode, a version line, the company mark and an expand
 control. seed's and stem's were the same shape with more rows; trellis's lacked
@@ -302,7 +309,7 @@ re-copy plus the items marked **edit**; everything else is additive.
 | Component | Change | Action |
 | --- | --- | --- |
 | `Tooltip` | Hoverable bubble (no `pointer-events-none`), close delay, Escape swallowed; `text` optional; render-prop child; the wrapper is `display: contents`, no `inline-flex` span. | Delete seed's and niac's local `Tooltip`; calls are unchanged (`text`, `side`, render-prop `{aria-describedby, onClick}`). The `className` niac passes (`w-full`, `flex-1`) never applied to a `display: contents` wrapper: drop it. |
-| `useDialog` | Focus in a layout effect; opener recovered from the click when focus is on the body (Safari); `returnFocusRef`; `tabindex="-1"` is not tabbable; an empty panel traps. | None. Delete the products' own "focus the opener" code (trellis) and un-`fixme` seed's "holds focus from the commit" e2e. `RightDrawer` and `Modal` accept `returnFocusRef`. |
+| `useDialog` | Focus in a layout effect; opener recovered, when focus is on the body (Safari, Firefox), from the last click or Enter/Space target, which one module-level capture listener records at import, so a dialog that mounts inside the click handler still returns focus; `returnFocusRef`; `tabindex="-1"` is not tabbable; an empty panel traps. | None. Delete the products' own "focus the opener" code (trellis) and un-`fixme` seed's "holds focus from the commit" e2e. `RightDrawer` and `Modal` accept `returnFocusRef`. |
 | `PageHeader` | Help button takes focus on click; carries `data-touch-target-overflow`. | Honour the attribute in density specs (above); remove niac's `::after` special case. |
 | `SettingsTabs` | Wraps instead of scrolling; no `-mb-px`; no `data-phone-width-exempt="tab-scroll"`; sticky from `sm` up. | Delete niac's `HelpTabs` (same props); remove the `tab-scroll` exemption from specs. |
 | `DataTable` | Frame is `relative` and, while it scrolls, a focusable labelled group; sort buttons 24px; checkboxes 24px; `getRowProps`, `search`, `toolbar`, `expandable`, `sortCycle`, `onSortChange`, `collation`; `selection.scope: 'all'`. | Delete niac's `ContainedTable` and the `tabindex` patch. `labels.selectAll` is unchanged for page scope. Nullish sort values now sort last. |
@@ -338,7 +345,7 @@ now holds for the copies.
 | `Checkbox`, `Toggle` | `onClick` reaches the control (`Toggle` runs it before `onChange`); `hideLabel` keeps the label as the accessible name and hides it visually. | None. |
 | `Modal` | `size="full"` is `h-full max-w-4xl`: as tall as the viewport allows, the body scrolls inside. | **edit** a call that used `full` for width only: use `3xl`. |
 | `Button` | `disabledReason`: with `disabled`, the button is `aria-disabled` (focusable, click and Enter swallowed, so no form submit) and a Tooltip carries the reason. | Replace seed's `GatedButton` with `<Button disabled={!allowed} disabledReason={t(...)}>`; delete `GatedButton.tsx`. |
-| `DataTable` | Split into `DataTable.tsx`, `DataTableTypes.ts`, `DataTableModel.ts`, `DataTableSort.ts`, `DataTableHead.tsx`, `DataTableRow.tsx`, `DataTableParts.tsx`, `DataTableStyles.ts`; tests into five files plus `DataTableTestUtils.tsx`. No API change: import `DataTable` and its types from `./shared/DataTable` as before. | Re-copy; drop the file-size skip. |
+| `DataTable` | Split into `DataTable.tsx`, `DataTableTypes.ts`, `DataTableModel.ts`, `DataTableSort.ts`, `DataTableHead.tsx`, `DataTableRow.tsx`, `DataTableParts.tsx`, `DataTableStyles.ts`; tests into five files plus the helper `test/DataTableTestUtils.tsx` (copied to `src/shared/test/`, a path the i18n copy gates skip like a test file). No API change: import `DataTable` and its types from `./shared/DataTable` as before. | Re-copy; drop the file-size skip. |
 
 **The Tooltip Escape flake.** niac's "Escape dismisses tooltip" failed
 intermittently under parallel workers. The cause was in the shared Tooltip, two
