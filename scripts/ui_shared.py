@@ -11,6 +11,10 @@ mechanism `ui/theme/README.md` describes, extended from one file to the set.
     ui/components/<name>.ts[x]       ->  ui/src/shared/<name>.ts[x]
                                          (tests included: a product's
                                          coverage ratchet counts them)
+    ui/components/test/<name>.tsx    ->  ui/src/shared/test/<name>.tsx
+                                         (test helpers: the i18n copy gates
+                                         skip any `/test/` path, so fixture
+                                         strings are not product copy)
 
 `ui/MANIFEST.sha256` lists the sha256 of every file by its product path, in
 `sha256sum` format. It is committed so a change to a shared file shows up in
@@ -51,9 +55,10 @@ def digest(path: Path) -> str:
 def canonical_files(repo_root: Path) -> dict[str, Path]:
     """Product path (relative to the product's ui/) -> canonical file."""
     files = {THEME_DEST.as_posix(): repo_root / THEME_SOURCE}
-    for source in sorted((repo_root / COMPONENTS_SOURCE).iterdir()):
-        if source.suffix in {".ts", ".tsx"}:
-            files[(SHARED_DEST / source.name).as_posix()] = source
+    components = repo_root / COMPONENTS_SOURCE
+    for source in sorted(components.rglob("*")):
+        if source.is_file() and source.suffix in {".ts", ".tsx"}:
+            files[(SHARED_DEST / source.relative_to(components)).as_posix()] = source
     return files
 
 
