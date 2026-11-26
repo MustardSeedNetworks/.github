@@ -29,6 +29,34 @@ inputs:
     description: "Run apt-get update first. Set 'false' when a prior step already did."
     required: false
     default: 'true'
+  max-command-timeout:
+    description: >-
+      Upper bound, in seconds, for the `apt-get install` invocation when the
+      download is large. The install timeout is sized from the measured
+      download (`apt-get --print-uris`): `size / min-download-kbps` plus a
+      minute, never below `command-timeout` and never above this. Empty keeps
+      the old behaviour (every invocation gets exactly `command-timeout`).
+      The caller's step `timeout-minutes` must cover attempts x (update +
+      this + 30 s) + the waits between attempts. A fixed 270 s killed
+      stem's Dataplane install on 2026-11-23 and 2026-11-26 when the Azure
+      mirror ran at about 0.3 MB/s for a 129 MB set.
+    required: false
+    default: ''
+  min-download-kbps:
+    description: >-
+      The slowest mirror throughput the install is sized to survive, in KB/s.
+      Only used with `max-command-timeout`.
+    required: false
+    default: '400'
+  mirror-fallback:
+    description: >-
+      On Ubuntu, from the second attempt on, point apt at archive.ubuntu.com
+      instead of the runner's Azure mirror (azure.archive.ubuntu.com or its
+      apt-mirrors.txt list), then update. A mirror that is slow once is often
+      slow for the next ten minutes, so retrying the same host repeats the
+      failure. 'false' keeps the runner's own mirror throughout.
+    required: false
+    default: 'true'
   no-install-recommends:
     description: 'Pass --no-install-recommends to apt-get install.'
     required: false
@@ -54,6 +82,9 @@ runs:
         RETRY_DELAY: ${{ inputs.retry-delay-seconds }}
         CMD_TIMEOUT: ${{ inputs.command-timeout }}
         DO_UPDATE: ${{ inputs.update }}
+        MAX_CMD_TIMEOUT: ${{ inputs.max-command-timeout }}
+        MIN_KBPS: ${{ inputs.min-download-kbps }}
+        MIRROR_FALLBACK: ${{ inputs.mirror-fallback }}
       # Three distinct failures are bounded here, and they pull in different
       # directions — a fix for one must not re-break the others.
       #
@@ -96,6 +127,17 @@ runs:
       #   - the custom-command path cannot do that (npx must not run as root),
       #     so after a failed attempt we look the holder up by name and clear
       #     it before retrying.
+      #
+      # SLOW MIRROR: distinct again. The mirror answers and the bytes move, but
+      # slowly (stem 2026-11-26: llvm-18-dev, 45 MB, still unfinished after
+      # 270 s), so a fixed per-invocation timeout kills a download that was
+      # progressing and the retry restarts the same slow transfer from the same
+      # mirror. Three things address it: callers drop packages they do not
+      # need (`no-install-recommends`: clang-18 recommends llvm-18-dev), the
+      # install timeout is sized from the measured download when the caller
+      # allows it (`max-command-timeout`), and the second attempt moves to
+      # archive.ubuntu.com (`mirror-fallback`). The measured size and the
+      # achieved rate are logged so a slow mirror shows in the job log.
       #
       # A composite step cannot carry `timeout-minutes`, so callers must keep a
       # step-level timeout as the outer backstop, and it has to cover the
@@ -167,11 +209,44 @@ runs:
           fi
         }
 
+        # Bytes the install would download, from apt's own plan.
+        plan_bytes() {
+          $SUDO apt-get install -y --print-uris $recommends $PACKAGES 2>/dev/null \
+            | awk '/^.http/ { s += $(NF - 1) } END { printf "%d", s }'
+        }
+
+        # Moves apt from the runner's Azure mirror to archive.ubuntu.com.
+        switch_mirror() {
+          [ "$MIRROR_FALLBACK" = "true" ] || return 0
+          . /etc/os-release 2>/dev/null || true
+          [ "${ID:-}" = "ubuntu" ] || return 0
+          changed=false
+          for f in /etc/apt/sources.list /etc/apt/sources.list.d/*; do
+            [ -f "$f" ] || continue
+            if grep -Eq 'azure\.archive\.ubuntu\.com|mirror\+file:/etc/apt/apt-mirrors\.txt' "$f"; then
+              $SUDO sed -i -E 's#(mirror\+file:/etc/apt/apt-mirrors\.txt|https?://azure\.archive\.ubuntu\.com/ubuntu/?)#http://archive.ubuntu.com/ubuntu/#g' "$f"
+              changed=true
+            fi
+          done
+          if [ "$changed" = "true" ]; then
+            echo "apt: switched to archive.ubuntu.com for attempt ${attempt}"
+            if [ "$DO_UPDATE" != "true" ]; then
+              $SUDO timeout -k 15 "$CMD_TIMEOUT" apt-get update || true
+            fi
+          fi
+        }
+
+        recommends=""
+        if [ "$NO_RECOMMENDS" = "true" ]; then
+          recommends="--no-install-recommends"
+        fi
+
         attempt=1
         while [ "$attempt" -le "$ATTEMPTS" ]; do
           if [ "$attempt" -gt 1 ]; then
             # A timeout kill can leave dpkg half-configured; recover first.
             $SUDO dpkg --configure -a >/dev/null 2>&1 || true
+            switch_mirror
           fi
 
           ok=true
@@ -187,14 +262,25 @@ runs:
                 exit 0
               fi
             else
-              recommends=""
-              if [ "$NO_RECOMMENDS" = "true" ]; then
-                recommends="--no-install-recommends"
+              install_timeout="$CMD_TIMEOUT"
+              bytes="$(plan_bytes)"
+              if [ -n "$MAX_CMD_TIMEOUT" ] && [ "${bytes:-0}" -gt 0 ]; then
+                need=$((bytes / 1024 / MIN_KBPS + 60))
+                if [ "$need" -gt "$install_timeout" ]; then
+                  install_timeout=$(( need < MAX_CMD_TIMEOUT ? need : MAX_CMD_TIMEOUT ))
+                fi
               fi
-              if $SUDO timeout -k 15 "$CMD_TIMEOUT" \
+              echo "apt: $((${bytes:-0} / 1048576)) MB to download; install timeout ${install_timeout}s"
+              started=$SECONDS
+              if $SUDO timeout -k 15 "$install_timeout" \
                 apt-get install -y $recommends $PACKAGES; then
+                took=$((SECONDS - started))
+                echo "apt: downloaded and installed in ${took}s ($((${bytes:-0} / 1024 / (took > 0 ? took : 1))) KB/s average)"
                 exit 0
               fi
+              took=$((SECONDS - started))
+              fetched="$($SUDO du -sk /var/cache/apt/archives 2>/dev/null | cut -f1)"
+              echo "apt: attempt ${attempt} ran ${took}s; ${fetched:-0} KB in the apt cache so far"
             fi
           fi
 
