@@ -209,6 +209,21 @@ jobs:
         with:
           node-version: "26.13.1"
 
+      # The products copy these files byte for byte and cannot edit them, and
+      # each fails a .ts/.tsx file over 600 lines. A file that passes here and
+      # fails there is unfixable downstream (.github#312's tests did exactly that).
+      - name: Keep every shared component file within the products' size limit
+        run: |
+          set -euo pipefail
+          max=600
+          over=$(find ui/components \( -name '*.ts' -o -name '*.tsx' \) -print0 \
+            | xargs -0 wc -l | awk -v max="$max" '$2 != "total" && $1 > max { print $1 " " $2 }')
+          if [ -n "$over" ]; then
+            echo "::error::shared UI files over $max lines (lines path):"
+            echo "$over"
+            exit 1
+          fi
+
       - name: Install the toolchain
         working-directory: ui
         run: npm ci --no-audit --no-fund
