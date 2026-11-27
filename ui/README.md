@@ -192,12 +192,28 @@ Slots, in this order, always:
 
 | Slot | Prop | Rule |
 | --- | --- | --- |
-| (a) status | `status: { tone, label }` | Optional. A `StatusPill` (niac Online; seed, stem and trellis daemon reachability). Collapsed it is a dot with a tooltip. Replaces the dot that sat on the product mark at the top of the rail. |
+| (a) status | `status: { state, label, detail }` | Optional. A `StatusPill` for the connection or daemon verdict; `state` is one of four (vocabulary below) and picks the tone, `label` and `detail` arrive translated. Collapsed it is a dot with a tooltip. Replaces the dot that sat on the product mark at the top of the rail. |
 | (b) product control | `productSlot` | Optional, ONE. `{ label, value, icon }` plus either `onClick` (a plain button) or `options` + `selected` + `onSelect` (a menu button: `role="menu"` of `menuitemradio`, arrow keys, Escape, opens upward or beside the collapsed rail). stem's role switch, seed's profile, niac's session. It cannot be drawn any other way. |
 | (c) actions | `help`, `settings`, `theme`, `signOut` | Icon-only buttons, fixed order, `{ label, onClick }`. `theme` also takes `isDark` (sun or moon) and its `label` names what a click does. `signOut` is passed only by a product with auth. No text links, no per-product icon rows. |
 | (d) version | `version: { value, label }` | `formatVersion(value)`: "v<semver>". |
 | (e) mark | `mark: { src, name }` | The vendored company glyph's URL and the wordmark; the wordmark goes when collapsed. |
 | (f) collapse | `collapse` | Same row as the mark, right-aligned; a chevron that is the expand control when collapsed. Absent in the drawer. |
+
+**Status vocabulary.** `state` is `connected`, `reconnecting`, `disconnected`
+or `degraded`; a product maps its own condition onto one of them and does not
+coin a fifth word ("Online", "Daemon connected" and the like are gone). The
+tone comes from the state (`railStateTone`), never from the product. One English
+set; a translation keeps the meaning and the ellipsis on "Reconnecting".
+
+| `state` | Tone | Label | Tooltip detail (English) |
+| --- | --- | --- | --- |
+| `connected` | success | Connected | The product's service is reachable and healthy. |
+| `reconnecting` | info | Reconnecting… | Connection lost; trying again. |
+| `disconnected` | error | Disconnected | The product's service cannot be reached. |
+| `degraded` | warning | Degraded | Reachable, but part of it is failing or slow. |
+
+A product may name its service in the detail ("The seed daemon is reachable"),
+never in the label. `status` is omitted only when the product has no verdict.
 
 **Version format.** The visible line is `v<semver>`, never a commit or `-dirty`.
 `git describe` output ("v0.285.3-31-gf4194afb-dirty") shows as "v0.285.3"; the
@@ -232,7 +248,7 @@ Help.
 | --- | --- | --- |
 | seed | `status` from `SidebarLayout`'s `status` (and drop the header dot); `productSlot` = the active profile (`options` = profiles, `onSelect` = `onProfileSwitch`); `help`, `settings`, `theme` (`toggleTheme`, `isDark`), `signOut` = `logout`; `version`; `mark`; `collapse`. | The local `SidebarFooter` and `FooterIconButton` in `Sidebar.tsx`, `RailControls.tsx`, `MsnMark.tsx`. "Manage Profiles" moves into Settings, and the Ethernet/Wi-Fi interface switch has no rail slot: it goes to the page that uses it (decision for the adoption PR). |
 | stem | `status` from `RailStatus` (drop the header dot); `productSlot` = the Reflector / Test Master switch (`options`, `onSelect`); `help`, `settings`, `theme`, `signOut` = logout; `version`; `mark`; `collapse`. | `SidebarFooter` and `FooterIconButton` in `SidebarChrome.tsx`, `roleControl` on `SidebarLayout`, `MsnMark.tsx`. The refresh icon is not a rail action: it moves to the pages that have data to refresh. |
-| niac | `status` = the connection state mapped to `success`/`warning`/`error`; `productSlot` = the session (`options` from `SessionSwitcher`'s list, or `onClick` opening it); `help`, `settings`, `theme`, `signOut` = `disconnectRuntimeAPI` (niac's disconnect is its sign-out); `version`; `mark`; `collapse`. | `RailControls.tsx`, `SidebarFooter` and `FooterIconButton` in `Sidebar.tsx`, the collapse chevron in `SidebarHeader`, `MsnMark.tsx`. |
+| niac | `status` = the connection state mapped to a `RailState`; `productSlot` = the session (`options` from `SessionSwitcher`'s list, or `onClick` opening it); `help`, `settings`, `theme`, `signOut` = `disconnectRuntimeAPI` (niac's disconnect is its sign-out); `version`; `mark`; `collapse`. | `RailControls.tsx`, `SidebarFooter` and `FooterIconButton` in `Sidebar.tsx`, the collapse chevron in `SidebarHeader`, `MsnMark.tsx`. |
 | trellis | `status` from `useConnectionStatus`; no `productSlot`; `help` (new: opens the page's help), `settings`, `theme` (`useTheme`), `signOut` only when `useAuth().required`; `version`; `mark`; `collapse`; the `MobileNav` drawer renders `variant="drawer"`. | The inline version block, `SettingsButton`, `ThemeToggle`, `SignOutButton` and the collapse button in `Sidebar.tsx`, `MsnMark.tsx`. The "Theme: System" text goes: the 3-way control is in Settings. |
 
 Specs that used `sidebar-help-button`, `sidebar-settings-button`, `theme-toggle`,
@@ -316,7 +332,7 @@ re-copy plus the items marked **edit**; everything else is additive.
 | `Checkbox` | 24px box; `id`, `name`, `data-testid`, `aria-*`, `ref` reach the input; `label` is a ReactNode. | None. |
 | `Toggle` | `id`, `name`, `data-testid`, `aria-*` reach the switch button; `label` is a ReactNode. | None. |
 | `Card` | `children` optional; adds `subtitle`, `icon`, `status` + `statusLabel`, `tone`, `padding`, `loading`, `error`, `empty`, `onClick`, `liveRegion`, `headingLevel`; new `CardRow`, `CardValue`, `CardDivider`. | **edit** seed: `status`, `statusLabel` (the StatusBadge's `accessibility.status.*` string), `enableLiveRegion` becomes `liveRegion`, `ariaLabel` becomes `aria-label`, `Status` becomes `CardStatus`; `CardRow` and `CardValue` keep their props (`value` may now be a node). **edit** niac: `StatusCard` is `Card` with `status`; `Card variant="elevated"`, `outlined` and `ghost` all become the one flat card (no variants, no gradients), `hover` is implied by `onClick`; `CardContent` is the card itself (move its `className` to the `Card`, and stack children with `space-y-*`), `CardHeader` is `title` and `headerAction`; `BaseCard` is `Card loading error empty` plus a three-line `getStatus` mapping at the call site. |
-| `Modal` | `closeOnBackdrop`, `closeOnEscape`, `showCloseButton`, `size` (`sm` to `full`), `header`, `footer`, `labelledBy`, `ariaLabel`, `returnFocusRef`; default size `lg`; body is focusable when it scrolls and holds nothing tabbable. | **edit** seed and niac: `isOpen` becomes `open`, `closeOnBackdropClick` becomes `closeOnBackdrop`, size `xl` becomes `lg` or `3xl`, `ModalHeader`, `ModalBody` and `ModalFooter` become `header`, children and `footer`; pass `size="md"` where the call relied on the old default; `closeLabel` is required. |
+| `Modal` | `closeOnBackdrop`, `closeOnEscape`, `showCloseButton`, `size` (`sm` to `full`, and `wide`), `header`, `footer`, `labelledBy`, `ariaLabel`, `returnFocusRef`; default size `lg`; body is focusable when it scrolls and holds nothing tabbable. | **edit** seed and niac: `isOpen` becomes `open`, `closeOnBackdropClick` becomes `closeOnBackdrop`, size `xl` becomes `lg` or `3xl`, `ModalHeader`, `ModalBody` and `ModalFooter` become `header`, children and `footer`; pass `size="md"` where the call relied on the old default; `closeLabel` is required. |
 | `FormField` | `label` and `hint` accept nodes; `labelAccessory`; optional `id`; `children` may be a plain node. | **edit** niac: `htmlFor` becomes `id` (the control keeps the same id), `helpText` becomes `labelAccessory={<HelpIcon ... />}`. |
 | `Input` | Documented `register()` use; every native attribute and `ref` pass through. | **edit** seed and niac: `label`, `error` and `hint` move to a wrapping `FormField`; `containerClassName` becomes the field's `className`. |
 | `Select` | Native `onChange` passes through next to `onValueChange`. | **edit** niac: `onChange(value)` becomes `onValueChange(value)`. |
@@ -391,3 +407,12 @@ construct whose layout changed between versions. `biome.json` is seed's rule set
 strictest of the four, so the copies pass in each product unchanged;
 `tsconfig.json` carries the fleet's required flags and `exactOptionalPropertyTypes`
 on top.
+
+## Migration from v3 to v4
+
+A re-copy plus the **edit** items.
+
+| Component | Change | Action |
+| --- | --- | --- |
+| `Modal` | `size="wide"` is new: `h-full max-w-[96rem]`, for a table or two-pane dialog; replaces a per-call `max-w-[min(96rem,100%)]!` override (seed `DiscoveryModal`). | **edit** drop the override, pass `size="wide"`. |
+| `RailFooter` | `status` is `{ state, label, detail }`, not `{ tone, label }`; exports `RailState`, `railStateTone`. | **edit** map the product's condition to a `RailState`, pass translated `label` and `detail` (README "Status vocabulary"). |
